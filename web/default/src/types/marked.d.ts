@@ -16,9 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export { CTA } from './sections/cta'
-export { Features } from './sections/features'
-export { Hero } from './sections/hero'
-export { HowItWorks } from './sections/how-it-works'
-export { Stats } from './sections/stats'
-export { SubscriptionPlansPreview } from './sections/subscription-plans'
+declare module 'marked' {
+  export interface MarkedOptions {
+    async?: boolean
+    breaks?: boolean
+    gfm?: boolean
+    renderer?: Renderer
+  }
+
+  export interface MarkedSingleton {
+    parse(markdown: string, options?: MarkedOptions): string
+    use(...extensions: unknown[]): void
+  }
+
+  export const marked: MarkedSingleton
+
+  export class Renderer {
+    code(code: string, infostring?: string, escaped?: boolean): string
+  }
+}

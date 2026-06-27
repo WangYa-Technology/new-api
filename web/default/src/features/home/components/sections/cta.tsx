@@ -17,10 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, BookOpen, CheckCircle2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
+
 import { AnimateInView } from '@/components/animate-in-view'
+import { Button } from '@/components/ui/button'
 
 interface CTAProps {
   className?: string
@@ -35,49 +36,57 @@ export function CTA(props: CTAProps) {
   }
 
   return (
-    <section className='relative z-10 overflow-hidden px-6 py-24 md:py-32'>
-      {/* Gradient mesh background */}
-      <div
-        aria-hidden
-        className='absolute inset-0 -z-10 opacity-20 dark:opacity-[0.08]'
-        style={{
-          background: [
-            'radial-gradient(ellipse 50% 50% at 30% 50%, oklch(0.7 0.15 250 / 70%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 40% 40% at 70% 40%, oklch(0.65 0.12 200 / 50%) 0%, transparent 70%)',
-          ].join(', '),
-        }}
-      />
-
-      <AnimateInView
-        className='mx-auto max-w-2xl text-center'
-        animation='scale-in'
-      >
-        <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-4xl'>
-          {t('Ready to simplify')}
-          <br />
-          <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
-            {t('your AI integration?')}
-          </span>
-        </h2>
-        <p className='text-muted-foreground/80 mx-auto mt-5 max-w-md text-sm leading-relaxed md:text-base'>
-          {t(
-            'Deploy your own gateway and start routing requests through your configured upstream services.'
-          )}
-        </p>
-        <div className='mt-8 flex items-center justify-center gap-3'>
-          <Button className='group rounded-lg' render={<Link to='/sign-up' />}>
-            {t('Get Started')}
-            <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
-          </Button>
-          <Button
-            variant='outline'
-            className='border-border/50 hover:border-border hover:bg-muted/50 rounded-lg'
-            render={<Link to='/pricing' />}
-          >
-            {t('View Pricing')}
-          </Button>
-        </div>
-      </AnimateInView>
+    <section className='bg-background text-foreground relative overflow-hidden px-4 py-20 sm:px-6 md:py-28'>
+      <div className='mx-auto max-w-7xl'>
+        <AnimateInView
+          animation='scale-in'
+          className='bg-card text-card-foreground border-border relative overflow-hidden rounded-3xl border px-6 py-12 shadow-[0_35px_100px_-62px_color-mix(in_oklch,var(--primary)_45%,transparent)] md:px-12 md:py-14'
+        >
+          <div
+            aria-hidden
+            className='absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,color-mix(in_oklch,var(--primary)_16%,transparent),transparent_36%),radial-gradient(circle_at_88%_18%,color-mix(in_oklch,var(--primary)_10%,transparent),transparent_34%)]'
+          />
+          <div className='relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center'>
+            <div>
+              <p className='text-primary mb-3 text-xs font-bold tracking-[0.2em] uppercase'>
+                {t('Ready to switch models faster?')}
+              </p>
+              <h2 className='max-w-3xl text-3xl leading-tight font-semibold tracking-tight md:text-5xl'>
+                {t('Give every app one compatible AI router.')}
+              </h2>
+              <div className='text-muted-foreground mt-5 grid gap-2 text-sm sm:grid-cols-3'>
+                {[
+                  t('Unified endpoint'),
+                  t('Budget guardrails'),
+                  t('Auditable request logs'),
+                ].map((item) => (
+                  <div key={item} className='flex items-center gap-2'>
+                    <CheckCircle2 className='text-primary size-4' />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className='flex flex-wrap gap-3 lg:justify-end'>
+              <Button
+                className='bg-primary text-primary-foreground group h-11 rounded-xl px-5 text-sm font-semibold shadow-[0_18px_40px_-18px_color-mix(in_oklch,var(--primary)_70%,transparent)] hover:bg-primary/90'
+                render={<Link to='/sign-up' />}
+              >
+                {t('Get API Key')}
+                <ArrowRight className='size-4 transition-transform group-hover:translate-x-0.5' />
+              </Button>
+              <Button
+                variant='outline'
+                className='border-border bg-card text-foreground h-11 rounded-xl px-5 text-sm font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground'
+                render={<Link to='/pricing' />}
+              >
+                <BookOpen className='size-4' />
+                {t('View pricing')}
+              </Button>
+            </div>
+          </div>
+        </AnimateInView>
+      </div>
     </section>
   )
 }

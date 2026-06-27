@@ -19,13 +19,30 @@ For commercial licensing, please contact support@quantumnous.com
 import DOMPurify from 'dompurify'
 import * as katex from 'katex'
 import 'katex/dist/katex.min.css'
-import { Marked, Renderer, type MarkedExtension, type Tokens } from 'marked'
+import { marked, Renderer } from 'marked'
 import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 
 interface MarkdownProps {
   children: string
   className?: string
+}
+
+interface MarkdownToken {
+  raw?: string
+  text?: string
+  type: string
+}
+
+interface MarkdownExtension {
+  extensions?: {
+    level: 'block' | 'inline'
+    name: string
+    renderer?: (token: MarkdownToken) => string
+    start?: (source: string) => number | undefined
+    tokenizer?: (source: string) => MarkdownToken | undefined
+  }[]
+  walkTokens?: (token: MarkdownToken) => void
 }
 
 const markdownOptions = {
@@ -565,32 +582,36 @@ function renderSequenceDiagram(source: string): string {
 const markdownRenderer = new Renderer()
 const renderDefaultCode = markdownRenderer.code.bind(markdownRenderer)
 
-markdownRenderer.code = (token: Tokens.Code): string => {
-  const language = token.lang?.toLowerCase()
+markdownRenderer.code = (
+  code: string,
+  infostring?: string,
+  escaped?: boolean
+): string => {
+  const language = infostring?.toLowerCase().trim()
 
   if (language === 'math' || language === 'katex' || language === 'latex') {
-    return renderMath(token.text, true)
+    return renderMath(code, true)
   }
 
   if (language === 'flow') {
-    return renderFlowDiagram(token.text)
+    return renderFlowDiagram(code)
   }
 
   if (language === 'seq') {
-    return renderSequenceDiagram(token.text)
+    return renderSequenceDiagram(code)
   }
 
-  return renderDefaultCode(token)
+  return renderDefaultCode(code, infostring, escaped)
 }
 
-const markdownExtensions: MarkedExtension[] = [
+const markdownExtensions: MarkdownExtension[] = [
   {
     walkTokens(token) {
       if (token.type !== 'text') {
         return
       }
 
-      token.text = replaceEmojiShortcodes(token.text)
+      token.text = replaceEmojiShortcodes(token.text || '')
     },
     extensions: [
       {
@@ -671,12 +692,11 @@ const markdownExtensions: MarkedExtension[] = [
   },
 ]
 
-const markdownParser = new Marked({
+marked.use({
   ...markdownOptions,
   renderer: markdownRenderer,
 })
-
-markdownParser.use(...markdownExtensions)
+marked.use(...markdownExtensions)
 
 function addExternalLinkAttributes(html: string): string {
   if (typeof window === 'undefined') {
@@ -695,7 +715,7 @@ function addExternalLinkAttributes(html: string): string {
 }
 
 function renderMarkdown(markdown: string): string {
-  const parsedHtml = markdownParser.parse(markdown, markdownOptions)
+  const parsedHtml = marked.parse(markdown, markdownOptions)
   const html = DOMPurify.sanitize(parsedHtml, sanitizeOptions)
 
   return addExternalLinkAttributes(html)

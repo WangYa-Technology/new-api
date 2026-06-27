@@ -17,11 +17,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { CherryStudio } from '@lobehub/icons'
-import { ArrowRight, BookOpen } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  CheckCircle2,
+  CircleDollarSign,
+  Gauge,
+  KeyRound,
+  Layers3,
+  Route,
+  ShieldCheck,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useStatus } from '@/hooks/use-status'
+
+import { AnimateInView } from '@/components/animate-in-view'
 import { Button } from '@/components/ui/button'
+import { useStatus } from '@/hooks/use-status'
+import { cn } from '@/lib/utils'
+
 import { HeroTerminalDemo } from '../hero-terminal-demo'
 
 interface HeroProps {
@@ -29,214 +43,252 @@ interface HeroProps {
   isAuthenticated?: boolean
 }
 
-// Stylized three-dots indicator representing "More"
-const MoreIcon = () => (
-  <svg
-    className='text-muted-foreground/60 group-hover:text-foreground size-6 shrink-0 transition-colors'
-    viewBox='0 0 24 24'
-    fill='none'
-    xmlns='http://www.w3.org/2000/svg'
-  >
-    <circle cx='6' cy='12' r='2' fill='currentColor' />
-    <circle cx='12' cy='12' r='2' fill='currentColor' />
-    <circle cx='18' cy='12' r='2' fill='currentColor' />
-  </svg>
-)
+const providerGroups = [
+  'DeepSeek',
+  'Qwen',
+  'Zhipu AI',
+  'Doubao',
+  'Moonshot AI',
+  'Baichuan AI',
+  'MiniMax',
+  'Tencent Hunyuan',
+  'StepFun',
+]
+
+const HERO_TARGET_ROTATION_MS = 2200
 
 export function Hero(props: HeroProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
+  const [rotatingTargetIndex, setRotatingTargetIndex] = useState(0)
   const docsUrl =
     (status?.docs_link as string | undefined) || 'https://docs.newapi.pro'
+  const rotatingTargets = [t('AI models'), t('AI agents'), t('AI teams')]
+
+  useEffect(() => {
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+    if (motionQuery.matches) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setRotatingTargetIndex((currentIndex) => {
+        return (currentIndex + 1) % rotatingTargets.length
+      })
+    }, HERO_TARGET_ROTATION_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [rotatingTargets.length])
 
   const renderDocsButton = () => {
-    const isExternal = docsUrl.startsWith('http')
-    if (isExternal) {
+    if (docsUrl.startsWith('http')) {
       return (
         <Button
           variant='outline'
-          className='group border-border/50 hover:border-border hover:bg-muted/50 inline-flex h-11 items-center gap-1.5 rounded-lg px-5 text-sm font-medium'
+          className='border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground h-11 rounded-full px-5 text-sm font-semibold shadow-sm backdrop-blur transition'
           render={
             <a href={docsUrl} target='_blank' rel='noopener noreferrer' />
           }
         >
-          <BookOpen className='text-muted-foreground/80 group-hover:text-foreground size-4 transition-colors duration-200' />
-          <span>{t('Docs')}</span>
+          <BookOpen className='size-4' />
+          {t('View Docs')}
         </Button>
       )
     }
+
     return (
       <Button
         variant='outline'
-        className='group border-border/50 hover:border-border hover:bg-muted/50 inline-flex h-11 items-center gap-1.5 rounded-lg px-5 text-sm font-medium'
+        className='border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground h-11 rounded-full px-5 text-sm font-semibold shadow-sm backdrop-blur transition'
         render={<Link to={docsUrl} />}
       >
-        <BookOpen className='text-muted-foreground/80 group-hover:text-foreground size-4 transition-colors duration-200' />
-        <span>{t('Docs')}</span>
+        <BookOpen className='size-4' />
+        {t('View Docs')}
       </Button>
     )
   }
 
   return (
-    <section className='relative z-10 overflow-hidden px-6 pt-24 pb-16 md:pt-32 md:pb-24 lg:pt-36 lg:pb-28'>
-      {/* Radial gradient background */}
+    <section
+      id='platform'
+      className={cn(
+        'bg-background text-foreground relative isolate scroll-mt-24 overflow-hidden px-4 pt-24 pb-12 sm:px-6 md:pt-32 md:pb-16',
+        props.className
+      )}
+    >
       <div
         aria-hidden
-        className='pointer-events-none absolute inset-0 -z-10 opacity-25 dark:opacity-[0.12]'
-        style={{
-          background: [
-            'radial-gradient(ellipse 60% 50% at 20% 20%, oklch(0.72 0.18 250 / 80%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 50% 40% at 80% 15%, oklch(0.65 0.15 200 / 60%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 40% 35% at 40% 80%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
-          ].join(', '),
-        }}
+        className='absolute inset-0 -z-10 bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--primary)_18%,transparent)_1px,transparent_1.6px)] [mask-image:linear-gradient(to_bottom,black_0%,black_62%,transparent_100%)] bg-[size:42px_42px] opacity-70'
       />
-      {/* Grid pattern */}
       <div
         aria-hidden
-        className='absolute inset-0 -z-10 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_30%,black_20%,transparent_100%)] bg-[size:4rem_4rem] opacity-[0.08]'
+        className='absolute inset-x-0 top-0 -z-10 h-44 bg-gradient-to-b from-background via-background/75 to-transparent'
       />
 
-      <div className='mx-auto grid max-w-6xl grid-cols-1 items-start gap-12 lg:grid-cols-12 lg:gap-8'>
-        {/* Left Column: Title, description, action buttons and application support */}
-        <div className='flex flex-col items-start text-left lg:col-span-6'>
-          {/* Top Pill Badge */}
-          <div
-            className='landing-animate-fade-up mb-5 inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/5 px-3 py-1.5 text-[11px] font-medium text-blue-600 opacity-0 shadow-xs dark:border-blue-400/20 dark:bg-blue-400/5 dark:text-blue-400'
-            style={{ animationDelay: '0ms' }}
+      <div className='mx-auto grid max-w-7xl gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(520px,1.08fr)] lg:items-center'>
+        <div className='max-w-3xl'>
+          <AnimateInView
+            delay={60}
+            threshold={0.02}
+            className='mb-6 flex flex-wrap items-center gap-2.5'
           >
-            <span className='relative flex size-1.5'>
-              <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75' />
-              <span className='relative inline-flex size-1.5 rounded-full bg-blue-500 dark:bg-blue-400' />
+            <span className='border-border bg-card text-card-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur'>
+              <ShieldCheck className='text-primary size-3.5' />
+              {t('AI infrastructure, simplified')}
             </span>
-            <span>{t('AI Application Infrastructure Foundation')}</span>
-          </div>
-
-          <h1
-            className='landing-animate-fade-up text-[clamp(2.25rem,4.5vw,3.25rem)] leading-[1.15] font-bold tracking-tight'
-            style={{ animationDelay: '60ms' }}
-          >
-            {t('Unified API Gateway for')}
-            <br />
-            <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
-              {t('Vast Range of AI Models')}
+            <span className='border-border bg-card text-card-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur'>
+              <CheckCircle2 className='text-primary size-3.5' />
+              {t('OpenAI and Anthropic compatible')}
             </span>
-          </h1>
-          <p
-            className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-xl text-base leading-relaxed opacity-0 md:text-[15px]'
-            style={{ animationDelay: '120ms' }}
-          >
-            {t(
-              'Access a vast selection of models via a standard, unified API protocol. Power AI applications, manage digital assets, and connect the Future.'
-            )}
-          </p>
+          </AnimateInView>
 
-          <div
-            className='landing-animate-fade-up mt-8 flex flex-wrap items-center gap-3 opacity-0'
-            style={{ animationDelay: '180ms' }}
+          <AnimateInView
+            delay={140}
+            threshold={0.02}
+            as='span'
+            className='block'
+          >
+            <h1 className='text-foreground max-w-4xl text-3xl leading-tight font-semibold tracking-normal sm:text-4xl lg:text-5xl'>
+              <span className='block'>{t('One AI gateway for')}</span>
+              <span className='text-primary mt-1 inline-flex min-w-[4.4em] overflow-hidden align-baseline sm:mt-2'>
+                <span
+                  key={rotatingTargets[rotatingTargetIndex]}
+                  className='hero-title-word block'
+                >
+                  {rotatingTargets[rotatingTargetIndex]}
+                </span>
+              </span>
+            </h1>
+          </AnimateInView>
+
+          <AnimateInView delay={220} threshold={0.02}>
+            <p className='text-muted-foreground mt-6 max-w-2xl text-base leading-8 md:text-lg'>
+              {t(
+                'Point OpenAI-compatible SDKs and agent tools to one base URL. Route by model alias across domestic and global providers, track usage, manage credits, and keep every request visible.'
+              )}
+            </p>
+          </AnimateInView>
+
+          <AnimateInView
+            delay={300}
+            threshold={0.02}
+            className='mt-8 flex flex-wrap items-center gap-3'
           >
             {props.isAuthenticated ? (
-              <>
-                <Button
-                  className='group h-11 rounded-lg px-5 text-sm font-medium'
-                  render={<Link to='/dashboard' />}
-                >
-                  {t('Go to Dashboard')}
-                  <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />
-                </Button>
-                {renderDocsButton()}
-              </>
+              <Button
+                className='bg-primary text-primary-foreground hover:bg-primary/90 group h-11 rounded-xl px-5 text-sm font-semibold shadow-[0_18px_40px_-18px_color-mix(in_oklch,var(--primary)_72%,transparent)]'
+                render={<Link to='/dashboard' />}
+              >
+                {t('Open Console')}
+                <ArrowRight className='size-4 transition-transform group-hover:translate-x-0.5' />
+              </Button>
             ) : (
-              <>
-                <Button
-                  className='group h-11 rounded-lg px-5 text-sm font-medium'
-                  render={<Link to='/sign-up' />}
-                >
-                  {t('Get Started')}
-                  <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />
-                </Button>
-                <Button
-                  variant='outline'
-                  className='border-border/50 hover:border-border hover:bg-muted/50 h-11 rounded-lg px-5 text-sm font-medium'
-                  render={<Link to='/pricing' />}
-                >
-                  {t('View Pricing')}
-                </Button>
-                {renderDocsButton()}
-              </>
+              <Button
+                className='bg-primary text-primary-foreground hover:bg-primary/90 group h-11 rounded-xl px-5 text-sm font-semibold shadow-[0_18px_40px_-18px_color-mix(in_oklch,var(--primary)_72%,transparent)]'
+                render={<Link to='/sign-up' />}
+              >
+                {t('Get API Key')}
+                <ArrowRight className='size-4 transition-transform group-hover:translate-x-0.5' />
+              </Button>
             )}
-          </div>
+            {renderDocsButton()}
+            <Button
+              variant='ghost'
+              className='text-muted-foreground hover:bg-accent hover:text-accent-foreground h-11 rounded-xl px-4 text-sm font-semibold'
+              render={<Link to='/pricing' />}
+            >
+              {t('Compare models')}
+            </Button>
+          </AnimateInView>
 
-          {/* Supported Apps (参考图二样式，进行卡片化和信息扩充设计，增加视觉高度) */}
-          <div
-            className='landing-animate-fade-up mt-10 w-full max-w-xl opacity-0'
-            style={{ animationDelay: '240ms' }}
+          <AnimateInView
+            delay={380}
+            threshold={0.02}
+            className='text-muted-foreground mt-8 grid max-w-2xl grid-cols-2 gap-3 text-sm sm:grid-cols-4'
           >
-            <div className='mb-4 flex flex-col gap-1'>
-              <span className='text-muted-foreground/50 text-[10px] font-bold tracking-[0.15em] uppercase'>
-                {t('Supported Applications')}
-              </span>
-              <p className='text-muted-foreground/60 text-xs leading-relaxed'>
-                {t(
-                  'Supports one-click configuration and perfectly adapts to NewAPI multi-protocol configuration.'
-                )}
-              </p>
-            </div>
-            <div className='flex flex-wrap items-center gap-3'>
-              {/* Cherry Studio */}
-              <a
-                href='https://cherry-ai.com'
-                target='_blank'
-                rel='noopener noreferrer'
-                className='group border-border/40 bg-muted/15 text-foreground/80 hover:border-border hover:bg-muted/30 hover:text-foreground flex items-center gap-3 rounded-full border px-5 py-2.5 text-sm font-medium shadow-[0_1px_2.5px_rgba(0,0,0,0.01)] backdrop-blur-xs transition-all duration-300 hover:scale-[1.02]'
-              >
-                <CherryStudio.Color size={24} className='shrink-0' />
-                <span>Cherry Studio</span>
-              </a>
-
-              {/* CC Switch */}
-              <a
-                href='https://ccswitch.io'
-                target='_blank'
-                rel='noopener noreferrer'
-                className='group border-border/40 bg-muted/15 text-foreground/80 hover:border-border hover:bg-muted/30 hover:text-foreground flex items-center gap-3 rounded-full border px-5 py-2.5 text-sm font-medium shadow-[0_1px_2.5px_rgba(0,0,0,0.01)] backdrop-blur-xs transition-all duration-300 hover:scale-[1.02]'
-              >
-                <img
-                  src='https://ccswitch.io/favicon.png'
-                  alt='CC Switch'
-                  className='size-6 shrink-0 rounded-md object-contain'
-                  onError={(e) => {
-                    // Fallback to a styled text avatar if the remote favicon fails to load in sandbox or local environments
-                    e.currentTarget.style.display = 'none'
-                    const fallback = e.currentTarget.nextSibling as HTMLElement
-                    if (fallback) fallback.style.display = 'flex'
-                  }}
-                />
-                <span
-                  style={{ display: 'none' }}
-                  className='size-6 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-[10px] font-bold text-blue-600 dark:bg-blue-400/10 dark:text-blue-400'
-                >
-                  CC
-                </span>
-                <span>CC Switch</span>
-              </a>
-
-              {/* "更多" */}
-              <div className='group border-border/40 bg-muted/15 text-foreground/55 hover:border-border hover:bg-muted/30 hover:text-foreground flex cursor-default items-center gap-2.5 rounded-full border px-5 py-2.5 text-sm font-medium shadow-[0_1px_2.5px_rgba(0,0,0,0.01)] backdrop-blur-xs transition-all duration-300 hover:scale-[1.02]'>
-                <MoreIcon />
-                <span>{t('More Apps')}</span>
+            {[
+              { icon: KeyRound, label: t('One API key') },
+              { icon: Route, label: t('Smart routing') },
+              { icon: Gauge, label: t('Usage visibility') },
+              { icon: CircleDollarSign, label: t('Cost control') },
+            ].map((item) => (
+              <div key={item.label} className='flex items-center gap-2'>
+                <item.icon className='text-primary size-4' />
+                <span>{item.label}</span>
               </div>
+            ))}
+          </AnimateInView>
+        </div>
+
+        <AnimateInView
+          delay={260}
+          threshold={0.02}
+          animation='fade-left'
+          className='relative min-w-0'
+        >
+          <div className='border-border bg-card text-card-foreground absolute -top-5 right-5 z-10 hidden rounded-2xl border px-4 py-3 shadow-[0_18px_55px_-35px_color-mix(in_oklch,var(--primary)_42%,transparent)] transition-transform duration-500 hover:-translate-y-1 lg:block'>
+            <p className='text-muted-foreground text-xs font-semibold'>
+              {t('Gateway online')}
+            </p>
+            <p className='text-card-foreground mt-1 flex items-center gap-2 text-sm font-semibold'>
+              <span className='size-2 rounded-full bg-emerald-500' />
+              {t('Healthy routing')}
+            </p>
+          </div>
+          <HeroTerminalDemo className='lg:translate-y-3' />
+          <div className='mt-5 grid gap-3 sm:grid-cols-3'>
+            {[
+              {
+                icon: KeyRound,
+                title: t('Keys'),
+                desc: t('Scoped credentials'),
+              },
+              {
+                icon: Layers3,
+                title: t('Models'),
+                desc: t('Provider routing'),
+              },
+              { icon: Gauge, title: t('Cost'), desc: t('Quota and billing') },
+            ].map((item, index) => (
+              <div
+                key={item.title}
+                className='border-border bg-card text-card-foreground rounded-2xl border px-4 py-3 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-1 hover:shadow-[0_20px_50px_-35px_color-mix(in_oklch,var(--primary)_42%,transparent)]'
+                style={{ transitionDelay: `${index * 40}ms` }}
+              >
+                <item.icon className='text-primary mb-2 size-4' />
+                <p className='text-card-foreground text-sm font-semibold'>
+                  {item.title}
+                </p>
+                <p className='text-muted-foreground text-xs'>
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </AnimateInView>
+      </div>
+
+      <div id='models' className='mx-auto mt-14 max-w-7xl scroll-mt-24'>
+        <AnimateInView>
+          <div className='border-primary/20 bg-[color-mix(in_oklch,var(--card)_88%,var(--foreground)_6%)] text-card-foreground rounded-2xl border px-4 py-4 shadow-[0_18px_55px_-45px_color-mix(in_oklch,var(--foreground)_45%,transparent)] backdrop-blur'>
+            <p className='text-foreground mb-3 text-center text-xs font-bold tracking-[0.18em] uppercase'>
+              {t('Route requests across China-first model providers')}
+            </p>
+            <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8'>
+              {providerGroups.map((provider) => (
+                <div
+                  key={provider}
+                  className='border-primary/20 bg-[color-mix(in_oklch,var(--background)_78%,var(--foreground)_9%)] text-foreground rounded-xl border px-3 py-2 text-center text-xs font-bold shadow-[inset_0_1px_0_color-mix(in_oklch,var(--foreground)_10%,transparent)]'
+                >
+                  {t(provider)}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-
-        {/* Right Column: Hero Terminal API Demo */}
-        <div
-          className='landing-animate-fade-up flex w-full justify-center opacity-0 lg:col-span-6'
-          style={{ animationDelay: '320ms' }}
-        >
-          <HeroTerminalDemo className='mt-8 lg:mt-0' />
-        </div>
+        </AnimateInView>
       </div>
     </section>
   )

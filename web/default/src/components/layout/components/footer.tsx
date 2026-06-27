@@ -18,7 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Fragment, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
+import { BookOpen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  IconDiscord,
+  IconGithub,
+  IconGmail,
+  IconTelegram,
+} from '@/assets/brand-icons'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -31,6 +38,12 @@ interface FooterLink {
 interface FooterColumnProps {
   title: string
   links: FooterLink[]
+}
+
+interface FooterSocialLink {
+  label: string
+  href: string
+  icon: React.ComponentType<{ className?: string }>
 }
 
 interface FooterProps {
@@ -46,6 +59,34 @@ const NEW_API_FOOTER_ATTRIBUTION_KEY = [
   'new' + 'api',
   'projectAttributionSuffix',
 ].join('.')
+
+const socialLinks: FooterSocialLink[] = [
+  {
+    label: 'GitHub',
+    href: 'https://github.com/QuantumNous/new-api',
+    icon: IconGithub,
+  },
+  {
+    label: 'Documentation',
+    href: 'https://docs.newapi.pro',
+    icon: BookOpen,
+  },
+  {
+    label: 'Discord',
+    href: 'https://docs.newapi.pro/support/community-interaction/',
+    icon: IconDiscord,
+  },
+  {
+    label: 'Telegram',
+    href: 'https://docs.newapi.pro/support/community-interaction/',
+    icon: IconTelegram,
+  },
+  {
+    label: 'Email',
+    href: 'mailto:support@quantumnous.com',
+    icon: IconGmail,
+  },
+]
 
 function FooterLinkItem(props: { link: FooterLink }) {
   const { t } = useTranslation()
@@ -72,6 +113,31 @@ function FooterLinkItem(props: { link: FooterLink }) {
     >
       {label}
     </Link>
+  )
+}
+
+function FooterSocialLinks() {
+  return (
+    <div className='flex flex-wrap items-center gap-2.5'>
+      {socialLinks.map((item) => {
+        const Icon = item.icon
+        return (
+          <a
+            key={item.label}
+            href={item.href}
+            target={item.href.startsWith('mailto:') ? undefined : '_blank'}
+            rel={
+              item.href.startsWith('mailto:') ? undefined : 'noopener noreferrer'
+            }
+            aria-label={item.label}
+            title={item.label}
+            className='border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary hover:text-primary-foreground flex size-9 items-center justify-center rounded-full border shadow-sm transition-all duration-200 hover:-translate-y-0.5'
+          >
+            <Icon className='size-4' />
+          </a>
+        )
+      })}
+    </div>
   )
 }
 
@@ -150,73 +216,88 @@ function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
 
 export function Footer(props: FooterProps) {
   const { t } = useTranslation()
-  const {
-    systemName,
-    logo: systemLogo,
-    footerHtml,
-    demoSiteEnabled,
-  } = useSystemConfig()
+  const { systemName, logo: systemLogo, footerHtml } = useSystemConfig()
 
   const displayLogo = systemLogo || props.logo || '/logo.png'
   const displayName = systemName || props.name || 'New API'
-  const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
 
   const fallbackColumns = useMemo<FooterColumnProps[]>(
     () => [
       {
-        title: t('footer.columns.about.title'),
+        title: 'footer.columns.product.title',
         links: [
           {
-            text: t('footer.columns.about.links.aboutProject'),
-            href: 'https://docs.newapi.pro/wiki/project-introduction/',
+            text: 'footer.columns.product.links.capabilities',
+            href: '/#platform',
           },
           {
-            text: t('footer.columns.about.links.contact'),
-            href: 'https://docs.newapi.pro/support/community-interaction/',
+            text: 'footer.columns.product.links.models',
+            href: '/#models',
           },
           {
-            text: t('footer.columns.about.links.features'),
-            href: 'https://docs.newapi.pro/wiki/features-introduction/',
+            text: 'footer.columns.product.links.playground',
+            href: '/playground',
+          },
+          {
+            text: 'footer.columns.product.links.wallet',
+            href: '/wallet',
           },
         ],
       },
       {
-        title: t('footer.columns.docs.title'),
+        title: 'footer.columns.docs.title',
         links: [
           {
-            text: t('footer.columns.docs.links.quickStart'),
+            text: 'footer.columns.docs.links.quickStart',
             href: 'https://docs.newapi.pro/getting-started/',
           },
           {
-            text: t('footer.columns.docs.links.installation'),
-            href: 'https://docs.newapi.pro/installation/',
+            text: 'footer.columns.docs.links.apiDocs',
+            href: 'https://docs.newapi.pro/api/',
           },
           {
-            text: t('footer.columns.docs.links.apiDocs'),
-            href: 'https://docs.newapi.pro/api/',
+            text: 'footer.columns.docs.links.modelPricing',
+            href: '/pricing',
           },
         ],
       },
       {
-        title: t('footer.columns.related.title'),
+        title: 'footer.columns.resources.title',
         links: [
           {
-            text: t('footer.columns.related.links.oneApi'),
-            href: 'https://github.com/songquanpeng/one-api',
+            text: 'footer.columns.resources.links.projectIntro',
+            href: 'https://docs.newapi.pro/wiki/project-introduction/',
           },
           {
-            text: t('footer.columns.related.links.midjourney'),
-            href: 'https://github.com/novicezk/midjourney-proxy',
+            text: 'footer.columns.resources.links.deployment',
+            href: 'https://docs.newapi.pro/installation/',
           },
           {
-            text: t('footer.columns.related.links.newApiKeyTool'),
+            text: 'footer.columns.resources.links.keyTool',
             href: 'https://github.com/Calcium-Ion/new-api-key-tool',
           },
         ],
       },
+      {
+        title: 'footer.columns.community.title',
+        links: [
+          {
+            text: 'footer.columns.community.links.github',
+            href: 'https://github.com/QuantumNous/new-api',
+          },
+          {
+            text: 'footer.columns.community.links.issues',
+            href: 'https://github.com/QuantumNous/new-api/issues',
+          },
+          {
+            text: 'footer.columns.community.links.channels',
+            href: 'https://docs.newapi.pro/support/community-interaction/',
+          },
+        ],
+      },
     ],
-    [t]
+    []
   )
 
   const displayColumns = props.columns ?? fallbackColumns
@@ -235,6 +316,7 @@ export function Footer(props: FooterProps) {
               className='custom-footer text-muted-foreground min-w-0 text-center text-sm sm:text-left'
               dangerouslySetInnerHTML={{ __html: footerHtml }}
             />
+            <FooterSocialLinks />
             <div className='border-border/60 text-muted-foreground/45 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
               <LegalLinks />
               <ProjectAttribution currentYear={currentYear} inline />
@@ -247,12 +329,14 @@ export function Footer(props: FooterProps) {
 
   return (
     <footer
-      className={cn('border-border/40 relative z-10 border-t', props.className)}
+      className={cn(
+        'border-border/60 bg-background text-foreground relative z-10 border-t',
+        props.className
+      )}
     >
-      <div className='mx-auto max-w-6xl px-6 py-12 md:py-16'>
-        <div className='flex flex-col justify-between gap-10 md:flex-row md:gap-16'>
-          {/* Brand column */}
-          <div className='shrink-0'>
+      <div className='mx-auto max-w-6xl px-6 py-14 md:py-18'>
+        <div className='grid gap-12 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,2fr)]'>
+          <div className='max-w-sm'>
             <Link to='/' className='group flex items-center gap-2.5'>
               <img
                 src={displayLogo}
@@ -266,27 +350,27 @@ export function Footer(props: FooterProps) {
             <p className='text-muted-foreground/60 mt-3 max-w-[200px] text-xs leading-relaxed'>
               {t('Powerful API Management Platform')}
             </p>
+            <div className='mt-6'>
+              <FooterSocialLinks />
+            </div>
           </div>
 
-          {/* Links columns */}
-          {isDemoSiteMode && (
-            <div className='grid grid-cols-3 gap-8 md:gap-16'>
-              {displayColumns.map((column, index) => (
-                <div key={index}>
-                  <p className='text-muted-foreground/50 mb-3 text-xs font-medium tracking-wider uppercase'>
-                    {t(column.title)}
-                  </p>
-                  <ul className='space-y-2.5'>
-                    {column.links.map((link, linkIndex) => (
-                      <li key={linkIndex}>
-                        <FooterLinkItem link={link} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className='grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4'>
+            {displayColumns.map((column) => (
+              <div key={column.title}>
+                <p className='text-foreground mb-4 text-xs font-semibold tracking-[0.16em] uppercase'>
+                  {t(column.title)}
+                </p>
+                <ul className='space-y-3'>
+                  {column.links.map((link) => (
+                    <li key={`${column.title}-${link.text}`}>
+                      <FooterLinkItem link={link} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Copyright + optional legal links inline on the left, project

@@ -16,72 +16,110 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Settings, Zap, BarChart3 } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import {
+  ArrowRight,
+  KeyRound,
+  PlugZap,
+  ScrollText,
+  Settings2,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+
 import { AnimateInView } from '@/components/animate-in-view'
+import { Button } from '@/components/ui/button'
 
 export function HowItWorks() {
   const { t } = useTranslation()
 
   const steps = [
     {
-      num: '1',
-      title: t('Configure'),
+      num: '01',
+      icon: KeyRound,
+      title: t('Create an API key'),
       desc: t(
-        'Add your API keys, set up channels and configure access permissions'
+        'Generate scoped credentials for an app, agent, teammate, or customer group.'
       ),
-      icon: <Settings className='size-6' strokeWidth={1.5} />,
     },
     {
-      num: '2',
-      title: t('Connect'),
+      num: '02',
+      icon: Settings2,
+      title: t('Set your base URL'),
       desc: t(
-        'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
+        'Point existing SDKs and tools to the OpenAI-compatible endpoint without rewriting clients.'
       ),
-      icon: <Zap className='size-6' strokeWidth={1.5} />,
     },
     {
-      num: '3',
-      title: t('Monitor'),
-      desc: t('Track usage, costs and performance with real-time analytics'),
-      icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
+      num: '03',
+      icon: PlugZap,
+      title: t('Choose a model alias'),
+      desc: t(
+        'Route the same request shape to DeepSeek, Qwen, Kimi, Doubao, Hunyuan, and fallback channels.'
+      ),
+    },
+    {
+      num: '04',
+      icon: ScrollText,
+      title: t('Monitor usage live'),
+      desc: t(
+        'Review latency, quota impact, token usage, billing records, and channel health in real time.'
+      ),
     },
   ]
 
   return (
-    <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
-      <div className='mx-auto max-w-6xl'>
-        <AnimateInView className='mb-16 text-center md:mb-20'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
-            {t('How It Works')}
-          </p>
-          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
-            {t('Three steps to get started')}
-          </h2>
-        </AnimateInView>
-
-        <div className='grid gap-8 md:grid-cols-3 md:gap-12'>
-          {steps.map((step, i) => (
-            <AnimateInView
-              key={step.num}
-              delay={i * 150}
-              animation='fade-up'
-              className='relative flex flex-col items-center text-center'
+    <section
+      id='how-it-works'
+      className='bg-background text-foreground relative z-10 scroll-mt-24 px-4 py-20 sm:px-6 md:py-28'
+    >
+      <div className='mx-auto max-w-7xl'>
+        <div className='grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-start'>
+          <AnimateInView>
+            <p className='text-primary mb-3 text-xs font-bold tracking-[0.2em] uppercase'>
+              {t('Start in minutes')}
+            </p>
+            <h2 className='text-foreground text-3xl leading-tight font-semibold tracking-tight md:text-4xl'>
+              {t('Use the tools you already have')}
+            </h2>
+            <p className='text-muted-foreground mt-4 max-w-xl text-base leading-7'>
+              {t(
+                'Keep familiar SDKs, prompts, and agent workflows. New API handles keys, model routing, limits, logs, and billing behind one compatible endpoint.'
+              )}
+            </p>
+            <Button
+              className='bg-primary text-primary-foreground group mt-7 h-11 rounded-xl px-5 text-sm font-semibold shadow-[0_18px_40px_-18px_color-mix(in_oklch,var(--primary)_70%,transparent)] hover:bg-primary/90'
+              render={<Link to='/sign-up' />}
             >
-              <div className='relative mb-6'>
-                <div className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'>
-                  {step.icon}
+              {t('Start setup')}
+              <ArrowRight className='size-4 transition-transform group-hover:translate-x-0.5' />
+            </Button>
+          </AnimateInView>
+
+          <div className='grid gap-4 sm:grid-cols-2'>
+            {steps.map((step, index) => (
+              <AnimateInView
+                key={step.num}
+                delay={index * 80}
+                animation='fade-up'
+                className='bg-card text-card-foreground border-border rounded-2xl border p-5 shadow-sm'
+              >
+                <div className='mb-6 flex items-center justify-between'>
+                  <span className='text-muted-foreground font-mono text-xs font-semibold'>
+                    {step.num}
+                  </span>
+                  <span className='bg-primary/10 text-primary border-primary/15 flex size-10 items-center justify-center rounded-2xl border'>
+                    <step.icon className='size-5' strokeWidth={1.8} />
+                  </span>
                 </div>
-                <div className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'>
-                  {step.num}
-                </div>
-              </div>
-              <h3 className='mb-2 text-base font-semibold'>{step.title}</h3>
-              <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>
-                {step.desc}
-              </p>
-            </AnimateInView>
-          ))}
+                <h3 className='text-card-foreground text-base font-semibold'>
+                  {step.title}
+                </h3>
+                <p className='text-muted-foreground mt-2 text-sm leading-6'>
+                  {step.desc}
+                </p>
+              </AnimateInView>
+            ))}
+          </div>
         </div>
       </div>
     </section>

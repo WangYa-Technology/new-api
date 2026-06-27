@@ -17,12 +17,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
-import { useAuthStore } from '@/stores/auth-store'
-import { Markdown } from '@/components/ui/markdown'
+
 import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
-import { CTA, Features, Hero, HowItWorks, Stats } from './components'
+import { Markdown } from '@/components/ui/markdown'
+import { useAuthStore } from '@/stores/auth-store'
+
+import {
+  CTA,
+  Features,
+  Hero,
+  HowItWorks,
+  Stats,
+  SubscriptionPlansPreview,
+} from './components'
 import { useHomePageContent } from './hooks'
+
+const homeNavLinks = [
+  { title: 'Platform', href: '/#platform' },
+  { title: 'Models', href: '/#models' },
+  { title: 'How it works', href: '/#how-it-works' },
+  { title: 'Pricing', href: '/pricing' },
+  { title: 'Docs', href: 'https://docs.newapi.pro', external: true },
+]
 
 export function Home() {
   const { t } = useTranslation()
@@ -42,12 +59,13 @@ export function Home() {
 
   if (content) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} navLinks={homeNavLinks}>
         <main className='overflow-x-hidden'>
           {isUrl ? (
             <iframe
               src={content}
               className='h-screen w-full border-none'
+              sandbox='allow-downloads allow-forms allow-popups allow-scripts'
               title={t('Custom Home Page')}
             />
           ) : (
@@ -56,15 +74,17 @@ export function Home() {
             </div>
           )}
         </main>
+        <Footer />
       </PublicLayout>
     )
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicLayout showMainContainer={false} navLinks={homeNavLinks}>
       <Hero isAuthenticated={isAuthenticated} />
       <Stats />
       <Features />
+      <SubscriptionPlansPreview isAuthenticated={isAuthenticated} />
       <HowItWorks />
       <CTA isAuthenticated={isAuthenticated} />
       <Footer />
