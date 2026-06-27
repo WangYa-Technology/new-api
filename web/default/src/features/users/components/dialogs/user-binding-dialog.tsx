@@ -1,3 +1,14 @@
+import {
+  Mail,
+  Globe,
+  MessageCircle,
+  Send,
+  Link2,
+  Unlink,
+  Loader2,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,21 +28,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import {
-  Mail,
-  Globe,
-  MessageCircle,
-  Send,
-  Link2,
-  Unlink,
-  Loader2,
-  Eye,
-  EyeOff,
-} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SiGithub, SiDiscord } from 'react-icons/si'
 import { toast } from 'sonner'
-import { api } from '@/lib/api'
+
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Dialog } from '@/components/dialog'
+import { OAuthProviderIcon } from '@/components/oauth-provider-icon'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -41,9 +45,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { Dialog } from '@/components/dialog'
-import { StatusBadge } from '@/components/status-badge'
+import { api } from '@/lib/api'
+
 import {
   getUser,
   getUserOAuthBindings,
@@ -143,20 +146,6 @@ const BUILTIN_BINDINGS: ReadonlyArray<{
   },
 ]
 
-function CustomProviderIcon(props: { iconUrl?: string }) {
-  if (!props.iconUrl) return <Link2 className='h-4 w-4' />
-  return (
-    <img
-      src={props.iconUrl}
-      alt=''
-      className='h-4 w-4 rounded-sm object-contain'
-      onError={(e) => {
-        e.currentTarget.style.display = 'none'
-      }}
-    />
-  )
-}
-
 export function UserBindingDialog(props: Props) {
   const { t } = useTranslation()
   const [user, setUser] = useState<User | null>(null)
@@ -247,7 +236,7 @@ export function UserBindingDialog(props: Props) {
       items.push({
         key: `oauth_${provider.id}`,
         label: provider.name || provider.id,
-        icon: <CustomProviderIcon iconUrl={provider.icon} />,
+        icon: <OAuthProviderIcon icon={provider.icon} />,
         value: binding?.external_id || '',
         type: 'custom',
         providerId: String(provider.id),

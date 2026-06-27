@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,14 +18,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
+
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { BadgeCell } from '@/components/data-table/core/badge-cell'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
+import { OAuthProviderIcon } from '@/components/oauth-provider-icon'
 import { StatusBadge } from '@/components/status-badge'
+import { Button } from '@/components/ui/button'
+
 import { useDeleteProvider } from '../hooks/use-custom-oauth-mutations'
 import type { CustomOAuthProvider } from '../types'
 
@@ -68,12 +71,7 @@ export function ProviderTable(props: ProviderTableProps) {
           {
             id: 'icon',
             header: t('Icon'),
-            cell: (provider) =>
-              provider.icon ? (
-                <span className='text-lg'>{provider.icon}</span>
-              ) : (
-                <span className='text-muted-foreground text-sm'>--</span>
-              ),
+            cell: (provider) => <OAuthProviderIcon icon={provider.icon} />,
           },
           {
             id: 'name',
