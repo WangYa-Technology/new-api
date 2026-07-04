@@ -1,4 +1,3 @@
-import { Link2 } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link2 } from 'lucide-react'
 import type { ComponentProps } from 'react'
 
 import { cn } from '@/lib/utils'

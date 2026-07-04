@@ -1,14 +1,3 @@
-import {
-  Mail,
-  Globe,
-  MessageCircle,
-  Send,
-  Link2,
-  Unlink,
-  Loader2,
-  Eye,
-  EyeOff,
-} from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -27,6 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  Mail,
+  Globe,
+  MessageCircle,
+  Send,
+  Link2,
+  Unlink,
+  Loader2,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SiGithub, SiDiscord } from 'react-icons/si'
