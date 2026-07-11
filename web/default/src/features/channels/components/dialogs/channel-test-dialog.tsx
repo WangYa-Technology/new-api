@@ -187,6 +187,7 @@ const endpointTypeOptions: Array<{ value: string; label: string }> = [
     value: 'image-generation',
     label: 'Image Generation (/v1/images/generations)',
   },
+  { value: 'xai-video', label: 'xAI Video (/v1/videos/generations)' },
   { value: 'embeddings', label: 'Embeddings (/v1/embeddings)' },
 ]
 
@@ -197,6 +198,7 @@ const endpointSelectItemClass =
 const STREAM_INCOMPATIBLE_ENDPOINTS = new Set([
   'embeddings',
   'image-generation',
+  'xai-video',
   'jina-rerank',
   'openai-response-compact',
 ])

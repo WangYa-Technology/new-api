@@ -181,6 +181,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			newAPIError: newAPIError,
 		}
 	}
+	if endpointType == string(constant.EndpointTypeXaiVideo) {
+		return testXaiVideoChannel(c, channel, testModel)
+	}
 
 	// Determine relay format based on endpoint type or request path
 	var relayFormat types.RelayFormat
@@ -516,6 +519,73 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		localErr:    nil,
 		newAPIError: nil,
 	}
+}
+
+func testXaiVideoChannel(c *gin.Context, channel *model.Channel, modelName string) testResult {
+	body, err := common.Marshal(map[string]any{
+		"model":        modelName,
+		"prompt":       "A sunrise above a calm sea",
+		"duration":     1,
+		"aspect_ratio": "16:9",
+		"resolution":   "720p",
+	})
+	if err != nil {
+		return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeJsonMarshalFailed)}
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	info, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
+	if err != nil {
+		return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeGenRelayInfoFailed)}
+	}
+	info.IsChannelTest = true
+	info.PublicTaskID = model.GenerateTaskID()
+	info.InitChannelMeta(c)
+
+	adaptor := relay.GetTaskAdaptor(relay.GetTaskPlatform(c))
+	if adaptor == nil {
+		err = fmt.Errorf("invalid api platform: %d", channel.Type)
+		return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeInvalidApiType)}
+	}
+	adaptor.Init(info)
+	if taskErr := adaptor.ValidateRequestAndSetAction(c, info); taskErr != nil {
+		localErr := taskErr.Error
+		if localErr == nil {
+			localErr = errors.New(taskErr.Message)
+		}
+		return testResult{context: c, localErr: localErr, newAPIError: types.NewOpenAIError(localErr, types.ErrorCodeInvalidRequest, taskErr.StatusCode)}
+	}
+	info.OriginModelName = modelName
+	info.UpstreamModelName = modelName
+	if err = helper.ModelMappedHelper(c, info, nil); err != nil {
+		return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeChannelModelMappedError)}
+	}
+
+	requestBody, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeConvertRequestFailed)}
+	}
+	resp, err := adaptor.DoRequest(c, info, requestBody)
+	if err != nil {
+		return testResult{context: c, localErr: err, newAPIError: types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)}
+	}
+	if resp == nil {
+		err = errors.New("xAI video endpoint returned an empty response")
+		return testResult{context: c, localErr: err, newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)}
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		err = service.RelayErrorHandler(c.Request.Context(), resp, true)
+		return testResult{context: c, localErr: err, newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponse, resp.StatusCode)}
+	}
+	if _, _, taskErr := adaptor.DoResponse(c, resp, info); taskErr != nil {
+		localErr := taskErr.Error
+		if localErr == nil {
+			localErr = errors.New(taskErr.Message)
+		}
+		return testResult{context: c, localErr: localErr, newAPIError: types.NewOpenAIError(localErr, types.ErrorCodeBadResponseBody, taskErr.StatusCode)}
+	}
+	return testResult{context: c}
 }
 
 func attachTestBillingRequestInput(info *relaycommon.RelayInfo, request dto.Request) error {
