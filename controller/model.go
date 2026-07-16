@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/lingyiwanwu"
 	"github.com/QuantumNous/new-api/relay/channel/minimax"
 	"github.com/QuantumNous/new-api/relay/channel/moonshot"
+	taskjiekou "github.com/QuantumNous/new-api/relay/channel/task/jiekou"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
@@ -80,6 +81,14 @@ func init() {
 			OwnedBy: minimax.ChannelName,
 		})
 	}
+	for _, modelName := range taskjiekou.ModelList {
+		openAIModels = append(openAIModels, dto.OpenAIModels{
+			Id:      modelName,
+			Object:  "model",
+			Created: 1626777600,
+			OwnedBy: taskjiekou.ChannelName,
+		})
+	}
 	for modelName, _ := range constant.MidjourneyModel2Action {
 		openAIModels = append(openAIModels, dto.OpenAIModels{
 			Id:      modelName,
@@ -105,12 +114,16 @@ func init() {
 		adaptor.Init(meta)
 		channelId2Models[i] = adaptor.GetModelList()
 	}
+	channelId2Models[constant.ChannelTypeJiekouSeedance] = taskjiekou.ModelList
 	openAIModels = lo.UniqBy(openAIModels, func(m dto.OpenAIModels) string {
 		return m.Id
 	})
 }
 
 func channelOwnerName(channelType int) string {
+	if channelType == constant.ChannelTypeJiekouSeedance {
+		return taskjiekou.ChannelName
+	}
 	apiType, success := common.ChannelType2APIType(channelType)
 	if !success {
 		return strings.ToLower(constant.GetChannelTypeName(channelType))

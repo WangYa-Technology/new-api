@@ -144,6 +144,22 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'Models exposed by this channel',
     },
   },
+  59: {
+    id: 59,
+    name: CHANNEL_TYPES[59],
+    icon: 'volcengine',
+    defaultBaseUrl: 'https://api.highwayapi.ai',
+    supportedModels: [
+      'seedance-2.0',
+      'seedance-2.0-fast',
+      'seedance-v1.5-pro-t2v',
+      'seedance-v1.5-pro-i2v',
+      'seedance-v1-pro-t2v',
+      'seedance-v1-pro-i2v',
+      'seedance-v1-lite-t2v',
+      'seedance-v1-lite-i2v',
+    ],
+  },
 }
 
 /**
