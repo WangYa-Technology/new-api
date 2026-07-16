@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,6 @@ func TestBuildSubmitRequest(t *testing.T) {
 				assert.Equal(t, defaultDuration, request.Duration)
 				assert.Equal(t, defaultResolution, request.Resolution)
 				assert.Equal(t, defaultAdaptiveRatio, request.Ratio)
-				assert.Empty(t, request.AspectRatio)
 			},
 		},
 		{
@@ -57,18 +57,19 @@ func TestBuildSubmitRequest(t *testing.T) {
 			},
 		},
 		{
-			name:  "v1 pro uses aspect ratio",
-			model: ModelSeedanceV1ProT2V,
+			name:  "seedance 1.5 supports 1080p and fps",
+			model: ModelSeedance15ProT2V,
 			request: relaycommon.TaskSubmitReq{
 				Prompt:   "A city at sunrise",
 				Size:     "1920x1080",
 				Duration: 10,
-				Metadata: map[string]any{"ratio": "1:1"},
+				Metadata: map[string]any{"fps": 24, "ratio": "1:1"},
 			},
 			assertion: func(t *testing.T, request *submitRequest) {
 				assert.Equal(t, "1080p", request.Resolution)
-				assert.Equal(t, "16:9", request.AspectRatio)
-				assert.Empty(t, request.Ratio)
+				assert.Equal(t, "16:9", request.Ratio)
+				require.NotNil(t, request.FPS)
+				assert.Equal(t, 24, *request.FPS)
 			},
 		},
 	}
@@ -91,15 +92,15 @@ func TestBuildSubmitRequestRejectsInvalidModelParameters(t *testing.T) {
 	}{
 		{
 			name:    "image model requires image",
-			model:   ModelSeedanceV1LiteI2V,
+			model:   ModelSeedance15ProI2V,
 			request: relaycommon.TaskSubmitReq{Prompt: "Animate this", Duration: 5},
 			message: "requires an input image",
 		},
 		{
 			name:    "text model rejects image",
-			model:   ModelSeedanceV1ProT2V,
+			model:   ModelSeedance15ProT2V,
 			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Images: []string{"https://example.com/frame.png"}, Duration: 5},
-			message: "does not accept an input image",
+			message: "does not accept input images",
 		},
 		{
 			name:    "fast model rejects 1080p",
@@ -108,16 +109,46 @@ func TestBuildSubmitRequestRejectsInvalidModelParameters(t *testing.T) {
 			message: "does not support resolution",
 		},
 		{
-			name:    "v1 model rejects unsupported duration",
-			model:   ModelSeedanceV1LiteT2V,
-			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 6},
-			message: "supports duration 5 or 10 seconds",
+			name:    "seedance 1.5 rejects unsupported duration",
+			model:   ModelSeedance15ProT2V,
+			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 13},
+			message: "duration must be between 4 and 12 seconds",
 		},
 		{
 			name:    "seedance 2 rejects service tier",
 			model:   ModelSeedance20,
 			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 5, Metadata: map[string]any{"service_tier": "flex"}},
 			message: "does not support service_tier",
+		},
+		{
+			name:    "seedance 1.5 rejects unsupported fps",
+			model:   ModelSeedance15ProT2V,
+			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 5, Metadata: map[string]any{"fps": 30}},
+			message: "only supports 24 fps",
+		},
+		{
+			name:    "seedance 1.5 rejects reference inputs",
+			model:   ModelSeedance15ProT2V,
+			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 5, Metadata: map[string]any{"reference_videos": []string{"https://example.com/reference.mp4"}}},
+			message: "does not support reference inputs",
+		},
+		{
+			name:    "seedance 2 rejects 1.5 parameters",
+			model:   ModelSeedance20,
+			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 5, Metadata: map[string]any{"camera_fixed": true}},
+			message: "does not support camera_fixed",
+		},
+		{
+			name:    "reference audio requires visual reference",
+			model:   ModelSeedance20,
+			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 5, Metadata: map[string]any{"reference_audios": []string{"https://example.com/reference.mp3"}}},
+			message: "requires a reference image or video",
+		},
+		{
+			name:    "rejects unknown ratio",
+			model:   ModelSeedance20,
+			request: relaycommon.TaskSubmitReq{Prompt: "Create a video", Duration: 5, Metadata: map[string]any{"ratio": "2:1"}},
+			message: "does not support ratio",
 		},
 	}
 
@@ -128,6 +159,23 @@ func TestBuildSubmitRequestRejectsInvalidModelParameters(t *testing.T) {
 			assert.Contains(t, err.Error(), test.message)
 		})
 	}
+}
+
+func TestValidateRequestRejectsInvalidParametersBeforeBilling(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", strings.NewReader(`{"model":"seedance-2.0-fast","prompt":"Create a video","size":"1080p"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	info := &relaycommon.RelayInfo{
+		OriginModelName: ModelSeedance20Fast,
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	}
+
+	taskErr := (&TaskAdaptor{}).ValidateRequestAndSetAction(c, info)
+
+	require.NotNil(t, taskErr)
+	assert.Equal(t, http.StatusBadRequest, taskErr.StatusCode)
+	assert.Contains(t, taskErr.Message, "does not support resolution")
 }
 
 func TestTaskAdaptorEstimateBilling(t *testing.T) {
@@ -144,8 +192,7 @@ func TestTaskAdaptorEstimateBilling(t *testing.T) {
 
 	ratios := (&TaskAdaptor{}).EstimateBilling(c, info)
 
-	assert.Equal(t, 10.0, ratios["seconds"])
-	assert.Equal(t, 2.5, ratios["resolution"])
+	assert.InDelta(t, 0.3742*10/0.1512, ratios["charge"], 0.000001)
 	assert.NotContains(t, ratios, "service_tier")
 
 	c.Set("task_request", relaycommon.TaskSubmitReq{
@@ -153,12 +200,103 @@ func TestTaskAdaptorEstimateBilling(t *testing.T) {
 		Images:   []string{"https://example.com/frame.png"},
 		Size:     "720p",
 		Duration: 10,
-		Metadata: map[string]any{"service_tier": "flex"},
+		Metadata: map[string]any{"service_tier": "flex", "generate_audio": false},
 	})
 	info.OriginModelName = ModelSeedance15ProI2V
 	info.UpstreamModelName = ModelSeedance15ProI2V
 	ratios = (&TaskAdaptor{}).EstimateBilling(c, info)
+	assert.InDelta(t, 0.026*10/0.052, ratios["charge"], 0.000001)
 	assert.Equal(t, 0.5, ratios["service_tier"])
+
+	c.Set("task_request", relaycommon.TaskSubmitReq{
+		Prompt:   "Use the reference motion",
+		Size:     "720p",
+		Duration: 4,
+		Metadata: map[string]any{"reference_videos": []string{"https://example.com/reference.mp4"}},
+	})
+	info.OriginModelName = ModelSeedance20
+	info.UpstreamModelName = ModelSeedance20
+	ratios = (&TaskAdaptor{}).EstimateBilling(c, info)
+	assert.InDelta(t, 0.65/0.1512, ratios["charge"], 0.000001)
+}
+
+func TestBillingRatiosUseLiveSKUPrices(t *testing.T) {
+	tests := []struct {
+		name           string
+		model          string
+		payload        submitRequest
+		expectedCharge float64
+		expectedTier   float64
+	}{
+		{
+			name:           "seedance 2 standard 480p",
+			model:          ModelSeedance20,
+			payload:        submitRequest{Duration: 5, Resolution: "480p"},
+			expectedCharge: 0.0703 * 5,
+		},
+		{
+			name:           "seedance 2 fast 720p",
+			model:          ModelSeedance20Fast,
+			payload:        submitRequest{Duration: 8, Resolution: "720p"},
+			expectedCharge: 0.121 * 8,
+		},
+		{
+			name:           "seedance 2 reference video minimum",
+			model:          ModelSeedance20Fast,
+			payload:        submitRequest{Duration: 15, Resolution: "720p", ReferenceVideos: []string{"https://example.com/reference.mp4"}},
+			expectedCharge: 1.78,
+		},
+		{
+			name:           "seedance 1.5 audio 1080p",
+			model:          ModelSeedance15ProT2V,
+			payload:        submitRequest{Duration: 4, Resolution: "1080p"},
+			expectedCharge: 0.116 * 4,
+		},
+		{
+			name:           "seedance 1.5 silent flex 480p",
+			model:          ModelSeedance15ProI2V,
+			payload:        submitRequest{Duration: 12, Resolution: "480p", GenerateAudio: common.GetPointer(false), ServiceTier: "flex"},
+			expectedCharge: 0.012 * 12,
+			expectedTier:   0.5,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ratios := billingRatios(&test.payload, test.model)
+			actualCharge := ratios["charge"] * modelConfigs[test.model].basePrice
+			assert.InDelta(t, test.expectedCharge, actualCharge, 0.000001)
+			if test.expectedTier == 0 {
+				assert.NotContains(t, ratios, "service_tier")
+			} else {
+				assert.Equal(t, test.expectedTier, ratios["service_tier"])
+			}
+		})
+	}
+}
+
+func TestDefaultModelPricesMatchBillingBase(t *testing.T) {
+	defaultPrices := ratio_setting.GetDefaultModelPriceMap()
+	for modelName, config := range modelConfigs {
+		assert.Equal(t, config.basePrice, defaultPrices[modelName], modelName)
+	}
+}
+
+func TestModelListOnlyContainsRealtimeJiekouProducts(t *testing.T) {
+	assert.Equal(t, []string{
+		ModelSeedance20,
+		ModelSeedance20Fast,
+		ModelSeedance15ProT2V,
+		ModelSeedance15ProI2V,
+	}, ModelList)
+	for _, modelName := range ModelList {
+		config, ok := modelConfigs[modelName]
+		require.True(t, ok, modelName)
+		assert.Positive(t, config.basePrice, modelName)
+		for resolution := range config.allowedResolution {
+			assert.Positive(t, perSecondPrices[modelName][resolution], modelName+" "+resolution)
+		}
+	}
 }
 
 func TestTaskAdaptorBuildRequestURL(t *testing.T) {

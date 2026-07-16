@@ -2,10 +2,10 @@ package jiekou
 
 type submitRequest struct {
 	Fast                  *bool    `json:"fast,omitempty"`
+	FPS                   *int     `json:"fps,omitempty"`
 	Seed                  *int64   `json:"seed,omitempty"`
 	Image                 string   `json:"image,omitempty"`
 	Ratio                 string   `json:"ratio,omitempty"`
-	AspectRatio           string   `json:"aspect_ratio,omitempty"`
 	Prompt                string   `json:"prompt,omitempty"`
 	Duration              int      `json:"duration"`
 	Watermark             *bool    `json:"watermark,omitempty"`

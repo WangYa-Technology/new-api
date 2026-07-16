@@ -297,6 +297,10 @@ var defaultModelPrice = map[string]float64{
 	"veo-3.0-fast-generate-001":      0.15,
 	"veo-3.1-generate-preview":       0.4,
 	"veo-3.1-fast-generate-preview":  0.15,
+	"seedance-2.0":                   0.1512,
+	"seedance-2.0-fast":              0.121,
+	"seedance-v1.5-pro-t2v":          0.052,
+	"seedance-v1.5-pro-i2v":          0.052,
 }
 
 var defaultAudioRatio = map[string]float64{

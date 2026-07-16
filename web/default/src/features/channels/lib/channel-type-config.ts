@@ -154,10 +154,6 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       'seedance-2.0-fast',
       'seedance-v1.5-pro-t2v',
       'seedance-v1.5-pro-i2v',
-      'seedance-v1-pro-t2v',
-      'seedance-v1-pro-i2v',
-      'seedance-v1-lite-t2v',
-      'seedance-v1-lite-i2v',
     ],
   },
 }

@@ -39,7 +39,19 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
-	return relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate)
+	if taskErr := relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate); taskErr != nil {
+		return taskErr
+	}
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+	}
+	if _, ok := modelConfigs[info.OriginModelName]; ok {
+		if _, err := buildSubmitRequest(&req, info.OriginModelName); err != nil {
+			return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+		}
+	}
+	return nil
 }
 
 func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {
@@ -51,22 +63,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if err != nil {
 		return nil
 	}
-
-	resolutionRatio := 1.0
-	switch payload.Resolution {
-	case "480p":
-		resolutionRatio = 0.5
-	case "1080p":
-		resolutionRatio = 2.5
-	}
-	ratios := map[string]float64{
-		"seconds":    float64(payload.Duration),
-		"resolution": resolutionRatio,
-	}
-	if payload.ServiceTier == "flex" {
-		ratios["service_tier"] = 0.5
-	}
-	return ratios
+	return billingRatios(payload, info.UpstreamModelName)
 }
 
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
@@ -237,24 +234,15 @@ func buildSubmitRequest(req *relaycommon.TaskSubmitReq, modelName string) (*subm
 		Prompt:     req.Prompt,
 		Duration:   duration,
 		Resolution: resolution,
+		Ratio:      defaultAdaptiveRatio,
 	}
-	if config.usesAspectRatio {
-		payload.AspectRatio = defaultAspectRatio
-		if inferredRatio != "" {
-			payload.AspectRatio = inferredRatio
-		}
-	} else {
-		payload.Ratio = defaultAspectRatio
-		if modelName == ModelSeedance20 || modelName == ModelSeedance20Fast {
-			payload.Ratio = defaultAdaptiveRatio
-		}
-		if inferredRatio != "" {
-			payload.Ratio = inferredRatio
-		}
+	if inferredRatio != "" {
+		payload.Ratio = inferredRatio
 	}
 	if len(req.Images) > 0 {
 		payload.Image = req.Images[0]
 	}
+	topLevelImage := payload.Image
 	if err := req.UnmarshalMetadata(payload); err != nil {
 		return nil, err
 	}
@@ -265,46 +253,97 @@ func buildSubmitRequest(req *relaycommon.TaskSubmitReq, modelName string) (*subm
 		payload.Fast = common.GetPointer(config.fast)
 	}
 	payload.Prompt = req.Prompt
-	if config.usesAspectRatio {
-		payload.Ratio = ""
-		if payload.AspectRatio == "" {
-			payload.AspectRatio = defaultAspectRatio
-		}
-	} else {
-		payload.AspectRatio = ""
-		if payload.Ratio == "" {
-			payload.Ratio = defaultAspectRatio
-		}
+	payload.Duration = duration
+	if topLevelImage != "" {
+		payload.Image = topLevelImage
+	}
+	if req.Size != "" {
+		payload.Resolution = resolution
+	}
+	if inferredRatio != "" {
+		payload.Ratio = inferredRatio
+	}
+	if payload.Ratio == "" {
+		payload.Ratio = defaultAdaptiveRatio
 	}
 	if payload.Resolution == "" {
 		payload.Resolution = defaultResolution
 	}
+	payload.Resolution = strings.ToLower(payload.Resolution)
+	if err := validateSubmitRequest(payload, config, modelName); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func validateSubmitRequest(payload *submitRequest, config modelConfig, modelName string) error {
 	if config.imageRequired && payload.Image == "" {
-		return nil, fmt.Errorf("model %s requires an input image", modelName)
+		return fmt.Errorf("model %s requires an input image", modelName)
 	}
-	if !config.imageAllowed && payload.Image != "" {
-		return nil, fmt.Errorf("model %s does not accept an input image", modelName)
+	if !config.imageAllowed && (payload.Image != "" || payload.LastImage != "") {
+		return fmt.Errorf("model %s does not accept input images", modelName)
 	}
-	if payload.ServiceTier != "" {
-		if !config.supportsServiceTier {
-			return nil, fmt.Errorf("model %s does not support service_tier", modelName)
-		}
-		if payload.ServiceTier != "default" && payload.ServiceTier != "flex" {
-			return nil, fmt.Errorf("model %s service_tier must be default or flex", modelName)
-		}
+	if payload.LastImage != "" && payload.Image == "" {
+		return fmt.Errorf("model %s requires image when last_image is provided", modelName)
 	}
-	if config.allowedDurations != nil {
-		if _, ok := config.allowedDurations[payload.Duration]; !ok {
-			return nil, fmt.Errorf("model %s supports duration 5 or 10 seconds", modelName)
-		}
-	} else if payload.Duration < config.minDuration || payload.Duration > config.maxDuration {
-		return nil, fmt.Errorf("model %s duration must be between %d and %d seconds", modelName, config.minDuration, config.maxDuration)
+	if payload.Duration < config.minDuration || payload.Duration > config.maxDuration {
+		return fmt.Errorf("model %s duration must be between %d and %d seconds", modelName, config.minDuration, config.maxDuration)
 	}
 	if _, ok := config.allowedResolution[strings.ToLower(payload.Resolution)]; !ok {
-		return nil, fmt.Errorf("model %s does not support resolution %s", modelName, payload.Resolution)
+		return fmt.Errorf("model %s does not support resolution %s", modelName, payload.Resolution)
 	}
-	payload.Resolution = strings.ToLower(payload.Resolution)
-	return payload, nil
+	if _, ok := allowedRatios[payload.Ratio]; !ok {
+		return fmt.Errorf("model %s does not support ratio %s", modelName, payload.Ratio)
+	}
+	if payload.Seed != nil && *payload.Seed < -1 {
+		return fmt.Errorf("model %s seed must be at least -1", modelName)
+	}
+
+	isSeedance20 := modelName == ModelSeedance20 || modelName == ModelSeedance20Fast
+	if isSeedance20 {
+		if payload.FPS != nil {
+			return fmt.Errorf("model %s does not support fps", modelName)
+		}
+		if payload.CameraFixed != nil {
+			return fmt.Errorf("model %s does not support camera_fixed", modelName)
+		}
+		if payload.ServiceTier != "" {
+			return fmt.Errorf("model %s does not support service_tier", modelName)
+		}
+		if payload.ExecutionExpiresAfter != nil {
+			return fmt.Errorf("model %s does not support execution_expires_after", modelName)
+		}
+		if len(payload.ReferenceAudios) > 3 || len(payload.ReferenceImages) > 9 || len(payload.ReferenceVideos) > 3 {
+			return fmt.Errorf("model %s exceeds the reference input limit", modelName)
+		}
+		if len(payload.ReferenceAudios) > 0 && len(payload.ReferenceImages) == 0 && len(payload.ReferenceVideos) == 0 {
+			return fmt.Errorf("model %s reference_audios requires a reference image or video", modelName)
+		}
+		return nil
+	}
+
+	if payload.FPS != nil && *payload.FPS != 24 {
+		return fmt.Errorf("model %s only supports 24 fps", modelName)
+	}
+	if payload.Seed != nil && *payload.Seed > 4294967295 {
+		return fmt.Errorf("model %s seed must not exceed 4294967295", modelName)
+	}
+	if payload.ServiceTier != "" && payload.ServiceTier != "default" && payload.ServiceTier != "flex" {
+		return fmt.Errorf("model %s service_tier must be default or flex", modelName)
+	}
+	if payload.ExecutionExpiresAfter != nil && (*payload.ExecutionExpiresAfter < 3600 || *payload.ExecutionExpiresAfter > 259200) {
+		return fmt.Errorf("model %s execution_expires_after must be between 3600 and 259200", modelName)
+	}
+	if payload.WebSearch != nil {
+		return fmt.Errorf("model %s does not support web_search", modelName)
+	}
+	if payload.ReturnLastFrame != nil {
+		return fmt.Errorf("model %s does not support return_last_frame", modelName)
+	}
+	if len(payload.ReferenceAudios) > 0 || len(payload.ReferenceImages) > 0 || len(payload.ReferenceVideos) > 0 {
+		return fmt.Errorf("model %s does not support reference inputs", modelName)
+	}
+	return nil
 }
 
 func normalizeBaseURL(baseURL string) string {
