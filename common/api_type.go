@@ -77,6 +77,10 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		apiType = constant.APITypeCodex
 	case constant.ChannelTypeAdvancedCustom:
 		apiType = constant.APITypeAdvancedCustom
+	case constant.ChannelTypeJiekouSeedance:
+		// Seedance uses the task relay path. OpenAI is retained as the
+		// synchronous fallback so shared channel metadata can be initialized.
+		apiType = constant.APITypeOpenAI
 	}
 	if apiType == -1 {
 		return constant.APITypeOpenAI, false
