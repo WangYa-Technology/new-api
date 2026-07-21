@@ -301,6 +301,12 @@ var defaultModelPrice = map[string]float64{
 	"seedance-2.0-fast":              0.121,
 	"seedance-v1.5-pro-t2v":          0.052,
 	"seedance-v1.5-pro-i2v":          0.052,
+	"music-3.0":                      0.15,
+	"music-2.6":                      0.15,
+	"music-cover":                    0.15,
+	"music-3.0-free":                 0,
+	"music-2.6-free":                 0,
+	"music-cover-free":               0,
 }
 
 var defaultAudioRatio = map[string]float64{
