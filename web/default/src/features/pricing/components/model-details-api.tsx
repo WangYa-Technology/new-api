@@ -423,6 +423,56 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
   ].join('\n')
 }
 
+function buildMusicSample(lang: Lang, ctx: SampleContext): string {
+  const url = `${ctx.baseUrl}${ctx.endpointPath}`
+  const prompt = 'Cinematic ambient music with warm strings and a gentle piano.'
+  const payload = {
+    model: ctx.modelName,
+    prompt,
+    is_instrumental: true,
+    output_format: 'url',
+    audio_setting: { sample_rate: 44100, bitrate: 256000, format: 'mp3' },
+  }
+
+  if (lang === 'curl') {
+    const body = JSON.stringify(payload, null, 2)
+    return [
+      `curl ${url} \\`,
+      `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+    ].join('\n')
+  }
+  if (lang === 'python') {
+    return [
+      'import os',
+      'import requests',
+      '',
+      `response = requests.post(`,
+      `    "${url}",`,
+      `    headers={"Authorization": f"Bearer {os.environ['${ctx.apiKeyEnv}']}", "Content-Type": "application/json"},`,
+      `    json=${JSON.stringify(payload, null, 4).replace(/^/gm, '    ').trimStart()},`,
+      ')',
+      'response.raise_for_status()',
+      'print(response.json()["data"]["audio"])',
+    ].join('\n')
+  }
+  return [
+    `const response = await fetch('${url}', {`,
+    `  method: 'POST',`,
+    `  headers: {`,
+    `    Authorization: \`Bearer \${process.env.${ctx.apiKeyEnv}}\`,`,
+    `    'Content-Type': 'application/json',`,
+    `  },`,
+    `  body: JSON.stringify(${JSON.stringify(payload, null, 2).replace(/^/gm, '  ').trimStart()}),`,
+    `})`,
+    '',
+    `if (!response.ok) throw new Error(await response.text())`,
+    `const data = await response.json()`,
+    `console.log(data.data.audio)`,
+  ].join('\n')
+}
+
 function buildSample(
   lang: Lang,
   endpointType: string,
@@ -433,6 +483,7 @@ function buildSample(
   if (endpointType === 'embeddings' || endpointType === 'jina-rerank')
     return buildEmbeddingSample(lang, ctx)
   if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
+  if (endpointType === 'music') return buildMusicSample(lang, ctx)
   return buildChatSample(lang, ctx)
 }
 

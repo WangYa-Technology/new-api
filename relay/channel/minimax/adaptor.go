@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/claude"
@@ -84,6 +85,14 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	return oaiImage2MiniMaxImageRequest(request), nil
 }
 
+func (a *Adaptor) ConvertMusicRequest(request dto.MiniMaxMusicRequest) (io.Reader, error) {
+	jsonData, err := common.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling MiniMax music request: %w", err)
+	}
+	return bytes.NewReader(jsonData), nil
+}
+
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
@@ -126,6 +135,9 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	}
 	if info.RelayMode == constant.RelayModeImagesGenerations {
 		return miniMaxImageHandler(c, resp, info)
+	}
+	if info.RelayMode == constant.RelayModeMusicGeneration {
+		return handleMusicResponse(c, resp, info)
 	}
 
 	switch info.RelayFormat {

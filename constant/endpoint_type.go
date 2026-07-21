@@ -13,6 +13,7 @@ const (
 	EndpointTypeEmbeddings            EndpointType = "embeddings"
 	EndpointTypeOpenAIVideo           EndpointType = "openai-video"
 	EndpointTypeXaiVideo              EndpointType = "xai-video"
+	EndpointTypeMusic                 EndpointType = "music"
 	//EndpointTypeMidjourney     EndpointType = "midjourney-proxy"
 	//EndpointTypeSuno           EndpointType = "suno-proxy"
 	//EndpointTypeKling          EndpointType = "kling"

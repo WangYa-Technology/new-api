@@ -47,12 +47,68 @@ func GetAndValidateRequest(c *gin.Context, format types.RelayFormat) (request dt
 		request, err = GetAndValidateRerankRequest(c)
 	case types.RelayFormatOpenAIAudio:
 		request, err = GetAndValidAudioRequest(c, relayMode)
+	case types.RelayFormatMiniMaxMusic:
+		request, err = GetAndValidateMiniMaxMusicRequest(c)
 	case types.RelayFormatOpenAIRealtime:
 		request = &dto.BaseRequest{}
 	default:
 		return nil, fmt.Errorf("unsupported relay format: %s", format)
 	}
 	return request, err
+}
+
+func GetAndValidateMiniMaxMusicRequest(c *gin.Context) (*dto.MiniMaxMusicRequest, error) {
+	request := &dto.MiniMaxMusicRequest{}
+	if err := common.UnmarshalBodyReusable(c, request); err != nil {
+		return nil, err
+	}
+	if request.Model == "" {
+		return nil, errors.New("model is required")
+	}
+	if request.Stream != nil && *request.Stream {
+		return nil, errors.New("streaming music generation is not supported")
+	}
+	if len(request.Prompt) > 2000 || len(request.Lyrics) > 3500 {
+		return nil, errors.New("prompt or lyrics exceeds the MiniMax limit")
+	}
+	isCover := strings.HasPrefix(request.Model, "music-cover")
+	if isCover {
+		inputs := 0
+		if request.AudioURL != "" {
+			inputs++
+		}
+		if request.AudioBase64 != "" {
+			inputs++
+		}
+		if request.CoverFeatureID != "" {
+			inputs++
+		}
+		if inputs != 1 {
+			return nil, errors.New("music-cover requires exactly one audio source or cover_feature_id")
+		}
+		if len(request.Prompt) < 10 || len(request.Prompt) > 300 {
+			return nil, errors.New("music-cover prompt must contain 10 to 300 characters")
+		}
+		if request.CoverFeatureID != "" && (len(request.Lyrics) < 10 || len(request.Lyrics) > 1000) {
+			return nil, errors.New("music-cover lyrics must contain 10 to 1000 characters when cover_feature_id is used")
+		}
+	} else {
+		isInstrumental := request.IsInstrumental != nil && *request.IsInstrumental
+		optimizeLyrics := request.LyricsOptimizer != nil && *request.LyricsOptimizer
+		if isInstrumental && request.Prompt == "" {
+			return nil, errors.New("prompt is required for instrumental music")
+		}
+		if !isInstrumental && !optimizeLyrics && request.Lyrics == "" {
+			return nil, errors.New("lyrics is required unless lyrics_optimizer or is_instrumental is enabled")
+		}
+	}
+	if request.OutputFormat == "" {
+		request.OutputFormat = "hex"
+	}
+	if request.OutputFormat != "url" && request.OutputFormat != "hex" {
+		return nil, errors.New("output_format must be url or hex")
+	}
+	return request, nil
 }
 
 func GetAndValidAudioRequest(c *gin.Context, relayMode int) (*dto.AudioRequest, error) {
