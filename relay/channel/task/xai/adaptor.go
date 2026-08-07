@@ -147,7 +147,6 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal request body failed")
 	}
-	info.UpstreamRequestBodySize = int64(len(converted))
 	return bytes.NewReader(converted), nil
 }
 

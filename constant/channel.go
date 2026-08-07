@@ -57,6 +57,8 @@ const (
 	ChannelTypeCodex          = 57
 	ChannelTypeAdvancedCustom = 58
 	ChannelTypeJiekouSeedance = 59
+	ChannelTypeSub2API        = 60
+	ChannelTypeNewAPI         = 61
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 )
 
@@ -121,6 +123,8 @@ var ChannelBaseURLs = []string{
 	"https://chatgpt.com",                       //57
 	"",                                          //58
 	"https://api.highwayapi.ai",                 //59
+	"",                                          //60
+	"",                                          //61
 }
 
 var ChannelTypeNames = map[int]string{
@@ -179,6 +183,8 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeReplicate:      "Replicate",
 	ChannelTypeCodex:          "ChatGPT Subscription (Codex)",
 	ChannelTypeAdvancedCustom: "Advanced Custom",
+	ChannelTypeSub2API:        "Sub2API",
+	ChannelTypeNewAPI:         "New API",
 	ChannelTypeJiekouSeedance: "Jiekou Seedance",
 }
 
