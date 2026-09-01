@@ -9,21 +9,320 @@ License, or (at your option) any later version.
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-const translations = {
-  en: { Music: 'Music' },
-  zh: { Music: '音乐' },
-  'zh-TW': { Music: '音樂' },
-  fr: { Music: 'Musique' },
-  ru: { Music: 'Музыка' },
-  ja: { Music: '音楽' },
-  vi: { Music: 'Âm nhạc' },
+const newKeys = {
+  en: {
+    'Add column': 'Add column',
+    'Add footer link': 'Add footer link',
+    'Add social link': 'Add social link',
+    'Column title': 'Column title',
+    'Column title is required': 'Column title is required',
+    'Column title must be 80 characters or fewer':
+      'Column title must be 80 characters or fewer',
+    'Configure the label and destination for this footer link.':
+      'Configure the label and destination for this footer link.',
+    'Configure the label, destination, and icon for this social link.':
+      'Configure the label, destination, and icon for this social link.',
+    'Delete column': 'Delete column',
+    'Delete footer column?': 'Delete footer column?',
+    'Delete footer link?': 'Delete footer link?',
+    'Edit column': 'Edit column',
+    'Edit footer link': 'Edit footer link',
+    'Edit social link': 'Edit social link',
+    'Enter a valid footer link': 'Enter a valid footer link',
+    'Failed to read icon file': 'Failed to read icon file',
+    'Footer columns': 'Footer columns',
+    'Footer description': 'Footer description',
+    'Link groups displayed on the right side of the footer.':
+      'Link groups displayed on the right side of the footer.',
+    'Links displayed beside the site description.':
+      'Links displayed beside the site description.',
+    'Manage the description, social links, and link columns shown in the homepage footer.':
+      'Manage the description, social links, and link columns shown in the homepage footer.',
+    'Move column down': 'Move column down',
+    'Move column up': 'Move column up',
+    'No footer columns configured': 'No footer columns configured',
+    'No social links configured': 'No social links configured',
+    'Please choose a PNG, JPG, WebP, or GIF image':
+      'Please choose a PNG, JPG, WebP, or GIF image',
+    'Please upload an icon': 'Please upload an icon',
+    'Set the heading shown above a group of footer links.':
+      'Set the heading shown above a group of footer links.',
+    'Social links': 'Social links',
+    'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.':
+      'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.',
+    'Text shown below the site name.': 'Text shown below the site name.',
+    'The column and all links inside it will be removed after you save.':
+      'The column and all links inside it will be removed after you save.',
+  },
+  zh: {
+    'Add column': '添加分栏',
+    'Add footer link': '添加页脚链接',
+    'Add social link': '添加社交链接',
+    'Column title': '分栏标题',
+    'Column title is required': '请输入分栏标题',
+    'Column title must be 80 characters or fewer': '分栏标题不能超过 80 个字符',
+    'Configure the label and destination for this footer link.':
+      '设置该页脚链接的标题和目标地址。',
+    'Configure the label, destination, and icon for this social link.':
+      '设置该社交链接的标题、目标地址和图标。',
+    'Delete column': '删除分栏',
+    'Delete footer column?': '删除页脚分栏？',
+    'Delete footer link?': '删除页脚链接？',
+    'Edit column': '编辑分栏',
+    'Edit footer link': '编辑页脚链接',
+    'Edit social link': '编辑社交链接',
+    'Enter a valid footer link': '请输入有效的页脚链接',
+    'Failed to read icon file': '无法读取图标文件',
+    'Footer columns': '页脚分栏',
+    'Footer description': '页脚说明',
+    'Link groups displayed on the right side of the footer.':
+      '显示在页脚右侧的链接分组。',
+    'Links displayed beside the site description.': '显示在站点说明旁的链接。',
+    'Manage the description, social links, and link columns shown in the homepage footer.':
+      '管理主页页脚中的说明、社交链接和链接分栏。',
+    'Move column down': '下移分栏',
+    'Move column up': '上移分栏',
+    'No footer columns configured': '尚未配置页脚分栏',
+    'No social links configured': '尚未配置社交链接',
+    'Please choose a PNG, JPG, WebP, or GIF image':
+      '请选择 PNG、JPG、WebP 或 GIF 图片',
+    'Please upload an icon': '请上传图标',
+    'Set the heading shown above a group of footer links.':
+      '设置一组页脚链接上方显示的标题。',
+    'Social links': '社交链接',
+    'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.':
+      '支持 PNG、JPG、WebP 或 GIF，文件大小上限为 100 KB。',
+    'Text shown below the site name.': '显示在站点名称下方的文字。',
+    'The column and all links inside it will be removed after you save.':
+      '保存后，该分栏及其中的所有链接都会被删除。',
+  },
+  'zh-TW': {
+    'Add column': '新增分欄',
+    'Add footer link': '新增頁尾連結',
+    'Add social link': '新增社群連結',
+    'Column title': '分欄標題',
+    'Column title is required': '請輸入分欄標題',
+    'Column title must be 80 characters or fewer': '分欄標題不能超過 80 個字元',
+    'Configure the label and destination for this footer link.':
+      '設定此頁尾連結的標題與目標網址。',
+    'Configure the label, destination, and icon for this social link.':
+      '設定此社群連結的標題、目標網址與圖示。',
+    'Delete column': '刪除分欄',
+    'Delete footer column?': '刪除頁尾分欄？',
+    'Delete footer link?': '刪除頁尾連結？',
+    'Edit column': '編輯分欄',
+    'Edit footer link': '編輯頁尾連結',
+    'Edit social link': '編輯社群連結',
+    'Enter a valid footer link': '請輸入有效的頁尾連結',
+    'Failed to read icon file': '無法讀取圖標檔案',
+    'Footer columns': '頁尾分欄',
+    'Footer description': '頁尾說明',
+    'Link groups displayed on the right side of the footer.':
+      '顯示於頁尾右側的連結群組。',
+    'Links displayed beside the site description.': '顯示於網站說明旁的連結。',
+    'Manage the description, social links, and link columns shown in the homepage footer.':
+      '管理首頁頁尾中的說明、社群連結與連結分欄。',
+    'Move column down': '下移分欄',
+    'Move column up': '上移分欄',
+    'No footer columns configured': '尚未設定頁尾分欄',
+    'No social links configured': '尚未設定社群連結',
+    'Please choose a PNG, JPG, WebP, or GIF image':
+      '請選擇 PNG、JPG、WebP 或 GIF 圖片',
+    'Please upload an icon': '請上傳圖標',
+    'Set the heading shown above a group of footer links.':
+      '設定一組頁尾連結上方顯示的標題。',
+    'Social links': '社群連結',
+    'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.':
+      '支援 PNG、JPG、WebP 或 GIF，檔案大小上限為 100 KB。',
+    'Text shown below the site name.': '顯示於網站名稱下方的文字。',
+    'The column and all links inside it will be removed after you save.':
+      '儲存後，此分欄及其中所有連結都會被刪除。',
+  },
+  fr: {
+    'Add column': 'Ajouter une colonne',
+    'Add footer link': 'Ajouter un lien de pied de page',
+    'Add social link': 'Ajouter un lien social',
+    'Column title': 'Titre de la colonne',
+    'Column title is required': 'Le titre de la colonne est requis',
+    'Column title must be 80 characters or fewer':
+      'Le titre de la colonne ne doit pas dépasser 80 caractères',
+    'Configure the label and destination for this footer link.':
+      'Configurez le libellé et la destination de ce lien de pied de page.',
+    'Configure the label, destination, and icon for this social link.':
+      'Configurez le libellé, la destination et l’icône de ce lien social.',
+    'Delete column': 'Supprimer la colonne',
+    'Delete footer column?': 'Supprimer la colonne du pied de page ?',
+    'Delete footer link?': 'Supprimer le lien du pied de page ?',
+    'Edit column': 'Modifier la colonne',
+    'Edit footer link': 'Modifier le lien du pied de page',
+    'Edit social link': 'Modifier le lien social',
+    'Enter a valid footer link': 'Saisissez un lien de pied de page valide',
+    'Failed to read icon file': "Impossible de lire le fichier d'icône",
+    'Footer columns': 'Colonnes du pied de page',
+    'Footer description': 'Description du pied de page',
+    'Link groups displayed on the right side of the footer.':
+      'Groupes de liens affichés à droite du pied de page.',
+    'Links displayed beside the site description.':
+      'Liens affichés à côté de la description du site.',
+    'Manage the description, social links, and link columns shown in the homepage footer.':
+      'Gérez la description, les liens sociaux et les colonnes du pied de page d’accueil.',
+    'Move column down': 'Descendre la colonne',
+    'Move column up': 'Monter la colonne',
+    'No footer columns configured': 'Aucune colonne de pied de page configurée',
+    'No social links configured': 'Aucun lien social configuré',
+    'Please choose a PNG, JPG, WebP, or GIF image':
+      'Choisissez une image PNG, JPG, WebP ou GIF',
+    'Please upload an icon': 'Veuillez importer une icône',
+    'Set the heading shown above a group of footer links.':
+      'Définissez le titre affiché au-dessus d’un groupe de liens.',
+    'Social links': 'Liens sociaux',
+    'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.':
+      'Prend en charge PNG, JPG, WebP ou GIF. Taille maximale : 100 Ko.',
+    'Text shown below the site name.': 'Texte affiché sous le nom du site.',
+    'The column and all links inside it will be removed after you save.':
+      'La colonne et tous ses liens seront supprimés après l’enregistrement.',
+  },
+  ja: {
+    'Add column': '列を追加',
+    'Add footer link': 'フッターリンクを追加',
+    'Add social link': 'ソーシャルリンクを追加',
+    'Column title': '列のタイトル',
+    'Column title is required': '列のタイトルを入力してください',
+    'Column title must be 80 characters or fewer':
+      '列のタイトルは80文字以内で入力してください',
+    'Configure the label and destination for this footer link.':
+      'フッターリンクの表示名とリンク先を設定します。',
+    'Configure the label, destination, and icon for this social link.':
+      'ソーシャルリンクの表示名、リンク先、アイコンを設定します。',
+    'Delete column': '列を削除',
+    'Delete footer column?': 'フッター列を削除しますか？',
+    'Delete footer link?': 'フッターリンクを削除しますか？',
+    'Edit column': '列を編集',
+    'Edit footer link': 'フッターリンクを編集',
+    'Edit social link': 'ソーシャルリンクを編集',
+    'Enter a valid footer link': '有効なフッターリンクを入力してください',
+    'Failed to read icon file': 'アイコンファイルを読み取れませんでした',
+    'Footer columns': 'フッター列',
+    'Footer description': 'フッターの説明',
+    'Link groups displayed on the right side of the footer.':
+      'フッター右側に表示するリンクグループです。',
+    'Links displayed beside the site description.':
+      'サイト説明の横に表示するリンクです。',
+    'Manage the description, social links, and link columns shown in the homepage footer.':
+      'ホームページのフッターに表示する説明、ソーシャルリンク、リンク列を管理します。',
+    'Move column down': '列を下へ移動',
+    'Move column up': '列を上へ移動',
+    'No footer columns configured': 'フッター列は設定されていません',
+    'No social links configured': 'ソーシャルリンクは設定されていません',
+    'Please choose a PNG, JPG, WebP, or GIF image':
+      'PNG、JPG、WebP、GIF形式の画像を選択してください',
+    'Please upload an icon': 'アイコンをアップロードしてください',
+    'Set the heading shown above a group of footer links.':
+      'フッターリンクのグループ上部に表示する見出しを設定します。',
+    'Social links': 'ソーシャルリンク',
+    'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.':
+      'PNG、JPG、WebP、GIFに対応。最大ファイルサイズ: 100 KB。',
+    'Text shown below the site name.': 'サイト名の下に表示するテキストです。',
+    'The column and all links inside it will be removed after you save.':
+      '保存すると、この列と列内のすべてのリンクが削除されます。',
+  },
+  ru: {
+    'Add column': 'Добавить колонку',
+    'Add footer link': 'Добавить ссылку в подвал',
+    'Add social link': 'Добавить социальную ссылку',
+    'Column title': 'Заголовок колонки',
+    'Column title is required': 'Укажите заголовок колонки',
+    'Column title must be 80 characters or fewer':
+      'Заголовок колонки не должен превышать 80 символов',
+    'Configure the label and destination for this footer link.':
+      'Настройте название и адрес ссылки в подвале.',
+    'Configure the label, destination, and icon for this social link.':
+      'Настройте название, адрес и значок социальной ссылки.',
+    'Delete column': 'Удалить колонку',
+    'Delete footer column?': 'Удалить колонку подвала?',
+    'Delete footer link?': 'Удалить ссылку в подвале?',
+    'Edit column': 'Изменить колонку',
+    'Edit footer link': 'Изменить ссылку в подвале',
+    'Edit social link': 'Изменить социальную ссылку',
+    'Enter a valid footer link': 'Введите корректную ссылку для подвала',
+    'Failed to read icon file': 'Не удалось прочитать файл иконки',
+    'Footer columns': 'Колонки подвала',
+    'Footer description': 'Описание подвала',
+    'Link groups displayed on the right side of the footer.':
+      'Группы ссылок справа в подвале.',
+    'Links displayed beside the site description.':
+      'Ссылки рядом с описанием сайта.',
+    'Manage the description, social links, and link columns shown in the homepage footer.':
+      'Настройте описание, социальные ссылки и колонки ссылок в подвале главной страницы.',
+    'Move column down': 'Переместить колонку вниз',
+    'Move column up': 'Переместить колонку вверх',
+    'No footer columns configured': 'Колонки подвала не настроены',
+    'No social links configured': 'Социальные ссылки не настроены',
+    'Please choose a PNG, JPG, WebP, or GIF image':
+      'Выберите изображение в формате PNG, JPG, WebP или GIF',
+    'Please upload an icon': 'Загрузите иконку',
+    'Set the heading shown above a group of footer links.':
+      'Задайте заголовок над группой ссылок в подвале.',
+    'Social links': 'Социальные ссылки',
+    'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.':
+      'Поддерживаются PNG, JPG, WebP и GIF. Максимальный размер файла: 100 КБ.',
+    'Text shown below the site name.': 'Текст под названием сайта.',
+    'The column and all links inside it will be removed after you save.':
+      'После сохранения колонка и все ссылки в ней будут удалены.',
+  },
+  vi: {
+    'Add column': 'Thêm cột',
+    'Add footer link': 'Thêm liên kết chân trang',
+    'Add social link': 'Thêm liên kết mạng xã hội',
+    'Column title': 'Tiêu đề cột',
+    'Column title is required': 'Vui lòng nhập tiêu đề cột',
+    'Column title must be 80 characters or fewer':
+      'Tiêu đề cột không được vượt quá 80 ký tự',
+    'Configure the label and destination for this footer link.':
+      'Cấu hình nhãn và địa chỉ cho liên kết chân trang này.',
+    'Configure the label, destination, and icon for this social link.':
+      'Cấu hình nhãn, địa chỉ và biểu tượng cho liên kết mạng xã hội này.',
+    'Delete column': 'Xóa cột',
+    'Delete footer column?': 'Xóa cột chân trang?',
+    'Delete footer link?': 'Xóa liên kết chân trang?',
+    'Edit column': 'Sửa cột',
+    'Edit footer link': 'Sửa liên kết chân trang',
+    'Edit social link': 'Sửa liên kết mạng xã hội',
+    'Enter a valid footer link': 'Nhập liên kết chân trang hợp lệ',
+    'Failed to read icon file': 'Không thể đọc tệp biểu tượng',
+    'Footer columns': 'Các cột chân trang',
+    'Footer description': 'Mô tả chân trang',
+    'Link groups displayed on the right side of the footer.':
+      'Các nhóm liên kết hiển thị bên phải chân trang.',
+    'Links displayed beside the site description.':
+      'Các liên kết hiển thị cạnh phần mô tả trang web.',
+    'Manage the description, social links, and link columns shown in the homepage footer.':
+      'Quản lý mô tả, liên kết mạng xã hội và các cột liên kết trong chân trang chủ.',
+    'Move column down': 'Di chuyển cột xuống',
+    'Move column up': 'Di chuyển cột lên',
+    'No footer columns configured': 'Chưa cấu hình cột chân trang',
+    'No social links configured': 'Chưa cấu hình liên kết mạng xã hội',
+    'Please choose a PNG, JPG, WebP, or GIF image':
+      'Vui lòng chọn ảnh PNG, JPG, WebP hoặc GIF',
+    'Please upload an icon': 'Vui lòng tải lên biểu tượng',
+    'Set the heading shown above a group of footer links.':
+      'Đặt tiêu đề hiển thị phía trên một nhóm liên kết chân trang.',
+    'Social links': 'Liên kết mạng xã hội',
+    'Supports PNG, JPG, WebP, or GIF. Maximum file size: 100 KB.':
+      'Hỗ trợ PNG, JPG, WebP hoặc GIF. Kích thước tệp tối đa: 100 KB.',
+    'Text shown below the site name.': 'Văn bản hiển thị dưới tên trang web.',
+    'The column and all links inside it will be removed after you save.':
+      'Cột và tất cả liên kết bên trong sẽ bị xóa sau khi lưu.',
+  },
 }
 
-for (const [locale, additions] of Object.entries(translations)) {
+for (const [locale, additions] of Object.entries(newKeys)) {
   const file = path.resolve(`src/i18n/locales/${locale}.json`)
   const messages = JSON.parse(await fs.readFile(file, 'utf8'))
-  await fs.writeFile(
-    file,
-    `${JSON.stringify({ ...messages, ...additions }, null, 2)}\n`
+  messages.translation = Object.fromEntries(
+    Object.entries({ ...messages.translation, ...additions }).sort(([a], [b]) =>
+      a.localeCompare(b)
+    )
   )
+  await fs.writeFile(file, `${JSON.stringify(messages, null, 2)}\n`)
 }

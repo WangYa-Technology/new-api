@@ -17,35 +17,37 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { BookOpen } from 'lucide-react'
 import { Fragment, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { FooterSocialIcon } from '@/features/footer/components/footer-social-icon'
 import {
-  IconDiscord,
-  IconGithub,
-  IconGmail,
-  IconTelegram,
-} from '@/assets/brand-icons'
-
+  parseFooterConfig,
+  type FooterSocialIconName,
+} from '@/features/footer/types'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { cn } from '@/lib/utils'
 
 interface FooterLink {
+  id?: string
   text: string
   href: string
+  translate?: boolean
 }
 
 interface FooterColumnProps {
+  id?: string
   title: string
   links: FooterLink[]
+  translate?: boolean
 }
 
 interface FooterSocialLink {
+  id?: string
   label: string
   href: string
-  icon: React.ComponentType<{ className?: string }>
+  icon: FooterSocialIconName
 }
 
 interface FooterProps {
@@ -66,41 +68,43 @@ const socialLinks: FooterSocialLink[] = [
   {
     label: 'GitHub',
     href: 'https://github.com/QuantumNous/new-api',
-    icon: IconGithub,
+    icon: 'github',
   },
   {
     label: 'Documentation',
     href: 'https://docs.newapi.pro',
-    icon: BookOpen,
+    icon: 'documentation',
   },
   {
     label: 'Discord',
     href: 'https://docs.newapi.pro/support/community-interaction/',
-    icon: IconDiscord,
+    icon: 'discord',
   },
   {
     label: 'Telegram',
     href: 'https://docs.newapi.pro/support/community-interaction/',
-    icon: IconTelegram,
+    icon: 'telegram',
   },
   {
     label: 'Email',
     href: 'mailto:support@quantumnous.com',
-    icon: IconGmail,
+    icon: 'email',
   },
 ]
 
 function FooterLinkItem(props: { link: FooterLink }) {
   const { t } = useTranslation()
-  const isExternal = props.link.href.startsWith('http')
-  const label = t(props.link.text)
+  const isExternal = /^(?:https?:|mailto:)/i.test(props.link.href)
+  const label =
+    props.link.translate === false ? props.link.text : t(props.link.text)
 
   if (isExternal) {
+    const opensNewTab = /^https?:/i.test(props.link.href)
     return (
       <a
         href={props.link.href}
-        target='_blank'
-        rel='noopener noreferrer'
+        target={opensNewTab ? '_blank' : undefined}
+        rel={opensNewTab ? 'noopener noreferrer' : undefined}
         className='text-muted-foreground hover:text-foreground text-sm transition-colors duration-200'
       >
         {label}
@@ -118,24 +122,22 @@ function FooterLinkItem(props: { link: FooterLink }) {
   )
 }
 
-function FooterSocialLinks() {
+function FooterSocialLinks(props: { links: FooterSocialLink[] }) {
   return (
     <div className='flex flex-wrap items-center gap-2.5'>
-      {socialLinks.map((item) => {
-        const Icon = item.icon
+      {props.links.map((item) => {
+        const opensNewTab = /^https?:/i.test(item.href)
         return (
           <a
-            key={item.label}
+            key={item.id ?? `${item.label}-${item.href}`}
             href={item.href}
-            target={item.href.startsWith('mailto:') ? undefined : '_blank'}
-            rel={
-              item.href.startsWith('mailto:') ? undefined : 'noopener noreferrer'
-            }
+            target={opensNewTab ? '_blank' : undefined}
+            rel={opensNewTab ? 'noopener noreferrer' : undefined}
             aria-label={item.label}
             title={item.label}
             className='border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary hover:text-primary-foreground flex size-9 items-center justify-center rounded-full border shadow-sm transition-all duration-200 hover:-translate-y-0.5'
           >
-            <Icon className='size-4' />
+            <FooterSocialIcon name={item.icon} />
           </a>
         )
       })}
@@ -146,18 +148,21 @@ function FooterSocialLinks() {
 // Renders User Agreement / Privacy Policy links inline with the parent's
 // copyright row when either is configured in System Settings → Site. Emits
 // fragmented siblings so the parent flex container's gap controls spacing.
-function LegalLinks(props: { leadingSeparator?: boolean }) {
+function LegalLinks(props: {
+  leadingSeparator?: boolean
+  userAgreementEnabled?: boolean
+  privacyPolicyEnabled?: boolean
+}) {
   const { t } = useTranslation()
-  const { status } = useStatus()
   const items: { key: string; label: string; href: string }[] = []
-  if (status?.user_agreement_enabled) {
+  if (props.userAgreementEnabled) {
     items.push({
       key: 'user-agreement',
       label: t('User Agreement'),
       href: '/user-agreement',
     })
   }
-  if (status?.privacy_policy_enabled) {
+  if (props.privacyPolicyEnabled) {
     items.push({
       key: 'privacy-policy',
       label: t('Privacy Policy'),
@@ -219,10 +224,15 @@ function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
 export function Footer(props: FooterProps) {
   const { t } = useTranslation()
   const { systemName, logo: systemLogo, footerHtml } = useSystemConfig()
+  const { status } = useStatus()
 
   const displayLogo = systemLogo || props.logo || '/logo.png'
   const displayName = systemName || props.name || 'New API'
   const currentYear = new Date().getFullYear()
+  const configuredFooter = useMemo(
+    () => parseFooterConfig(status?.footer_config),
+    [status?.footer_config]
+  )
 
   const fallbackColumns = useMemo<FooterColumnProps[]>(
     () => [
@@ -302,7 +312,39 @@ export function Footer(props: FooterProps) {
     []
   )
 
-  const displayColumns = props.columns ?? fallbackColumns
+  const configuredColumns = useMemo<FooterColumnProps[] | null>(
+    () =>
+      configuredFooter
+        ? configuredFooter.columns.map((column) => ({
+            id: column.id,
+            title: column.title,
+            translate: false,
+            links: column.links.map((link) => ({
+              id: link.id,
+              text: link.label,
+              href: link.url,
+              translate: false,
+            })),
+          }))
+        : null,
+    [configuredFooter]
+  )
+  const configuredSocialLinks = useMemo<FooterSocialLink[] | null>(
+    () =>
+      configuredFooter
+        ? configuredFooter.socialLinks.map((link) => ({
+            id: link.id,
+            label: link.label,
+            href: link.url,
+            icon: link.icon,
+          }))
+        : null,
+    [configuredFooter]
+  )
+  const footerColumns = props.columns ?? configuredColumns ?? fallbackColumns
+  const footerSocialLinks = configuredSocialLinks ?? socialLinks
+  const footerDescription =
+    configuredFooter?.description ?? t('Powerful API Management Platform')
 
   if (footerHtml) {
     return (
@@ -318,9 +360,12 @@ export function Footer(props: FooterProps) {
               className='custom-footer text-muted-foreground min-w-0 text-center text-sm sm:text-left'
               dangerouslySetInnerHTML={{ __html: footerHtml }}
             />
-            <FooterSocialLinks />
+            <FooterSocialLinks links={footerSocialLinks} />
             <div className='border-border/60 text-muted-foreground/45 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
-              <LegalLinks />
+              <LegalLinks
+                userAgreementEnabled={status?.user_agreement_enabled}
+                privacyPolicyEnabled={status?.privacy_policy_enabled}
+              />
               <ProjectAttribution currentYear={currentYear} inline />
             </div>
           </div>
@@ -350,22 +395,26 @@ export function Footer(props: FooterProps) {
               </span>
             </Link>
             <p className='text-muted-foreground/60 mt-3 max-w-[200px] text-xs leading-relaxed'>
-              {t('Powerful API Management Platform')}
+              {footerDescription}
             </p>
             <div className='mt-6'>
-              <FooterSocialLinks />
+              <FooterSocialLinks links={footerSocialLinks} />
             </div>
           </div>
 
           <div className='grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4'>
-            {displayColumns.map((column) => (
-              <div key={column.title}>
+            {footerColumns.map((column) => (
+              <div key={column.id ?? column.title}>
                 <p className='text-foreground mb-4 text-xs font-semibold tracking-[0.16em] uppercase'>
-                  {t(column.title)}
+                  {column.translate === false ? column.title : t(column.title)}
                 </p>
                 <ul className='space-y-3'>
                   {column.links.map((link) => (
-                    <li key={`${column.title}-${link.text}`}>
+                    <li
+                      key={
+                        link.id ?? `${column.title}-${link.text}-${link.href}`
+                      }
+                    >
                       <FooterLinkItem link={link} />
                     </li>
                   ))}
@@ -383,7 +432,11 @@ export function Footer(props: FooterProps) {
               &copy; {currentYear} {displayName}.{' '}
               {props.copyright ?? t('footer.defaultCopyright')}
             </span>
-            <LegalLinks leadingSeparator />
+            <LegalLinks
+              leadingSeparator
+              userAgreementEnabled={status?.user_agreement_enabled}
+              privacyPolicyEnabled={status?.privacy_policy_enabled}
+            />
           </div>
           <ProjectAttribution currentYear={currentYear} />
         </div>

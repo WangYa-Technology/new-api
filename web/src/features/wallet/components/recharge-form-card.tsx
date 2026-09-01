@@ -21,6 +21,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
@@ -34,12 +35,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatNumber } from '@/lib/format'
+import {
+  formatBillingCurrencyFromUSD,
+  formatLocalCurrencyAmount,
+} from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 import {
-  formatCurrency,
-  getDiscountLabel,
+  getDiscountPercentage,
   getPaymentIcon,
   getMinTopupAmount,
   calculatePresetPricing,
@@ -226,51 +229,58 @@ export function RechargeFormCard({
                   <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
                     {t('Amount')}
                   </Label>
-                  <div className='grid grid-cols-2 gap-1.5 sm:gap-3 md:grid-cols-4'>
+                  <div className='grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-3'>
                     {presetAmounts.map((preset) => {
                       const discount =
                         preset.discount ||
                         topupInfo?.discount?.[preset.value] ||
                         1.0
-                      const {
-                        displayValue,
-                        actualPrice,
-                        savedAmount,
-                        hasDiscount,
-                      } = calculatePresetPricing(
-                        preset.value,
-                        priceRatio,
-                        discount,
-                        usdExchangeRate
-                      )
+                      const { originalPrice, actualPrice, hasDiscount } =
+                        calculatePresetPricing(
+                          preset.value,
+                          priceRatio,
+                          discount,
+                          usdExchangeRate
+                        )
                       return (
                         <Button
                           key={preset.value}
                           variant='outline'
                           className={cn(
-                            'flex min-h-16 flex-col items-start rounded-lg px-3 py-2.5 text-left whitespace-normal sm:min-h-[72px] sm:p-4',
+                            'flex h-[76px] min-w-0 flex-col items-start rounded-lg px-3 py-2.5 text-left whitespace-normal shadow-xs hover:border-foreground/40 sm:p-3',
                             selectedPreset === preset.value
-                              ? 'border-foreground bg-foreground/5 dark:border-foreground dark:bg-foreground/10'
-                              : 'border-muted'
+                              ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                              : 'border-border'
                           )}
                           onClick={() => onSelectPreset(preset)}
                         >
-                          <div className='flex w-full items-center justify-between'>
-                            <div className='text-base font-semibold sm:text-lg'>
-                              {formatNumber(displayValue)}
+                          <div className='flex w-full min-w-0 items-center justify-between gap-2'>
+                            <div className='min-w-0 truncate text-base font-semibold sm:text-lg'>
+                              {formatBillingCurrencyFromUSD(preset.value)}
                             </div>
                             {hasDiscount && (
-                              <div className='text-xs font-medium text-green-600'>
-                                {getDiscountLabel(discount)}
-                              </div>
+                              <Badge
+                                variant='outline'
+                                className='border-success/30 bg-success/10 text-success'
+                              >
+                                {t('{{percent}}% off', {
+                                  percent: getDiscountPercentage(discount),
+                                })}
+                              </Badge>
                             )}
                           </div>
-                          <div className='text-muted-foreground mt-1.5 w-full text-xs sm:mt-2'>
-                            Pay {formatCurrency(actualPrice)}
-                            {hasDiscount && savedAmount > 0 && (
-                              <span className='text-green-600'>
-                                {' '}
-                                • Save {formatCurrency(savedAmount)}
+                          <div className='mt-1.5 flex w-full min-w-0 items-baseline gap-2 text-xs sm:mt-2'>
+                            <span className='min-w-0 truncate font-medium'>
+                              {t('Pay {{amount}}', {
+                                amount: formatLocalCurrencyAmount(actualPrice),
+                              })}
+                            </span>
+                            {hasDiscount && (
+                              <span
+                                aria-hidden='true'
+                                className='text-muted-foreground shrink-0 line-through'
+                              >
+                                {formatLocalCurrencyAmount(originalPrice)}
                               </span>
                             )}
                           </div>
@@ -295,7 +305,9 @@ export function RechargeFormCard({
                     value={localAmount}
                     onChange={(e) => handleAmountChange(e.target.value)}
                     min={minTopup}
-                    placeholder={`Minimum ${minTopup}`}
+                    placeholder={t('Minimum {{amount}}', {
+                      amount: minTopup,
+                    })}
                     className='h-9 text-base sm:h-10 sm:text-lg'
                   />
                   <div className='bg-muted/30 flex min-h-9 items-center justify-between gap-2 rounded-md border px-3 lg:min-w-52'>
@@ -306,7 +318,7 @@ export function RechargeFormCard({
                       <Skeleton className='h-5 w-16' />
                     ) : (
                       <span className='text-sm font-semibold'>
-                        {formatCurrency(paymentAmount)}
+                        {formatLocalCurrencyAmount(paymentAmount)}
                       </span>
                     )}
                   </div>

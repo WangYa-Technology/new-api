@@ -128,6 +128,10 @@ export function SidebarModulesSection({
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
       },
+      support: {
+        title: t('Support'),
+        description: t('Open configured support and community resources.'),
+      },
     },
     admin: {
       channel: {

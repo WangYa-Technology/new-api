@@ -101,8 +101,11 @@ api.interceptors.response.use(
     const config = error?.config as ApiRequestConfig | undefined
     const skipErrorHandler = config?.skipErrorHandler
     const status = error?.response?.status
+    const hasAuthenticatedSession = Boolean(
+      useAuthStore.getState().auth.session
+    )
 
-    if (status === 401) {
+    if (status === 401 && hasAuthenticatedSession) {
       if (config && !config.skipAuthRefresh && !config.authRetry) {
         config.authRetry = true
         const outcome = await refreshAuthentication()
