@@ -118,6 +118,7 @@ func InitEnv() {
 	CohereSafetySetting = GetEnvOrDefaultString("COHERE_SAFETY_SETTING", "NONE")
 
 	// Initialize rate limit variables
+	RateLimitDisabled = os.Getenv("GIN_MODE") == "debug" && GetEnvOrDefaultBool("DISABLE_RATE_LIMIT", false)
 	GlobalApiRateLimitEnable = GetEnvOrDefaultBool("GLOBAL_API_RATE_LIMIT_ENABLE", true)
 	GlobalApiRateLimitNum = GetEnvOrDefault("GLOBAL_API_RATE_LIMIT", 360)
 	GlobalApiRateLimitDuration = int64(GetEnvOrDefault("GLOBAL_API_RATE_LIMIT_DURATION", 180))

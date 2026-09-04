@@ -27,6 +27,7 @@ import { FAQSection } from './faq-section'
 import { FooterSection } from './footer-section'
 import { SupportSection } from './support-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
+import { WalletPromotionSection } from './wallet-promotion-section'
 
 /**
  * Validate and coerce DataExportDefaultTime to a safe value
@@ -90,6 +91,15 @@ const CONTENT_SECTIONS = [
     titleKey: 'Footer',
     build: (settings: ContentSettings) => (
       <FooterSection data={settings['console_setting.footer']} />
+    ),
+  },
+  {
+    id: 'wallet-promotion',
+    titleKey: 'Wallet promotion',
+    build: (settings: ContentSettings) => (
+      <WalletPromotionSection
+        data={settings['console_setting.wallet_promotion']}
+      />
     ),
   },
   {

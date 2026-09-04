@@ -169,7 +169,7 @@ func memoryRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) 
 func ModelRequestRateLimit() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		// 在每个请求时检查是否启用限流
-		if !setting.ModelRequestRateLimitEnabled {
+		if common.RateLimitDisabled || !setting.ModelRequestRateLimitEnabled {
 			c.Next()
 			return
 		}

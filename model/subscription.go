@@ -36,6 +36,7 @@ const (
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
+	ErrActiveSubscriptionExists       = errors.New("同等级订阅已存在活跃订阅")
 )
 
 const (
@@ -423,6 +424,36 @@ func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	return count, nil
 }
 
+// HasActiveUserSubscriptionByPlan reports whether a user already has an
+// unexpired active subscription at the specified plan's level. UpgradeGroup is
+// the level identifier; plans without one fall back to their own plan ID so
+// unrelated plans without group upgrades do not block each other. Payment entry
+// points use this for early rejection; balance and admin creation also enforce
+// the limit transactionally. Provider-confirmed orders are always settled.
+func HasActiveUserSubscriptionByPlan(userId int, planId int) (bool, error) {
+	if userId <= 0 || planId <= 0 {
+		return false, errors.New("invalid userId or planId")
+	}
+	plan, err := getSubscriptionPlanByIdTx(nil, planId)
+	if err != nil {
+		return false, err
+	}
+	now := GetDBTimestamp()
+	var count int64
+	query := DB.Model(&UserSubscription{}).
+		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now)
+	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
+	if upgradeGroup == "" {
+		query = query.Where("plan_id = ?", planId)
+	} else {
+		query = query.Where("plan_id = ? OR upgrade_group = ?", planId, upgradeGroup)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func getUserGroupByIdTx(tx *gorm.DB, userId int) (string, error) {
 	if userId <= 0 {
 		return "", errors.New("invalid userId")
@@ -482,6 +513,10 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 }
 
 func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
+	return createUserSubscriptionFromPlanTx(tx, userId, plan, source, true)
+}
+
+func createUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string, enforceActiveLimit bool) (*UserSubscription, error) {
 	if tx == nil {
 		return nil, errors.New("tx is nil")
 	}
@@ -490,6 +525,24 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	}
 	if userId <= 0 {
 		return nil, errors.New("invalid user id")
+	}
+	nowUnix := getDBTimestamp(tx)
+	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
+	if enforceActiveLimit {
+		var activeCount int64
+		activeQuery := tx.Model(&UserSubscription{}).
+			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", nowUnix)
+		if upgradeGroup == "" {
+			activeQuery = activeQuery.Where("plan_id = ?", plan.Id)
+		} else {
+			activeQuery = activeQuery.Where("plan_id = ? OR upgrade_group = ?", plan.Id, upgradeGroup)
+		}
+		if err := activeQuery.Count(&activeCount).Error; err != nil {
+			return nil, err
+		}
+		if activeCount > 0 {
+			return nil, ErrActiveSubscriptionExists
+		}
 	}
 	if plan.MaxPurchasePerUser > 0 {
 		var count int64
@@ -502,7 +555,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			return nil, errors.New("已达到该套餐购买上限")
 		}
 	}
-	nowUnix := GetDBTimestamp()
 	now := time.Unix(nowUnix, 0)
 	endUnix, err := calcPlanEndTime(now, plan)
 	if err != nil {
@@ -514,7 +566,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if nextReset > 0 {
 		lastReset = now.Unix()
 	}
-	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
 	prevGroup := ""
 	if upgradeGroup != "" {
 		currentGroup, err := getUserGroupByIdTx(tx, userId)
@@ -593,7 +644,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if order.Status != common.TopUpStatusPending {
 			return ErrSubscriptionOrderStatusInvalid
 		}
-		plan, err := GetSubscriptionPlanById(order.PlanId)
+		plan, err := getSubscriptionPlanByIdTx(tx, order.PlanId)
 		if err != nil {
 			return err
 		}
@@ -606,12 +657,18 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
 			return err
 		}
-		subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
+		// The purchase endpoints reject an already-active subscription before
+		// checkout. Once the provider confirms payment, settlement must not fail
+		// merely because another subscription became active in the meantime.
+		subscription, err := createUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order", false)
 		if err != nil {
 			return err
 		}
 		if subscription.PrevUserGroup != "" {
 			upgradeGroup = strings.TrimSpace(subscription.UpgradeGroup)
+		}
+		if actualPaymentMethod != "" && order.PaymentMethod != actualPaymentMethod {
+			order.PaymentMethod = actualPaymentMethod
 		}
 		if err := upsertSubscriptionTopUpTx(tx, &order); err != nil {
 			return err
@@ -620,9 +677,6 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		order.CompleteTime = common.GetTimestamp()
 		if providerPayload != "" {
 			order.ProviderPayload = providerPayload
-		}
-		if actualPaymentMethod != "" && order.PaymentMethod != actualPaymentMethod {
-			order.PaymentMethod = actualPaymentMethod
 		}
 		if err := tx.Save(&order).Error; err != nil {
 			return err
@@ -655,20 +709,26 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 	if err := tx.Where("trade_no = ?", order.TradeNo).First(&topup).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			topup = TopUp{
-				UserId:        order.UserId,
-				Amount:        0,
-				Money:         order.Money,
-				TradeNo:       order.TradeNo,
-				PaymentMethod: order.PaymentMethod,
-				CreateTime:    order.CreateTime,
-				CompleteTime:  now,
-				Status:        common.TopUpStatusSuccess,
+				UserId:          order.UserId,
+				Amount:          0,
+				Money:           order.Money,
+				TradeNo:         order.TradeNo,
+				PaymentMethod:   order.PaymentMethod,
+				PaymentProvider: order.PaymentProvider,
+				CreateTime:      order.CreateTime,
+				CompleteTime:    now,
+				Status:          common.TopUpStatusSuccess,
 			}
 			return tx.Create(&topup).Error
 		}
 		return err
 	}
 	topup.Money = order.Money
+	if topup.PaymentProvider == "" {
+		topup.PaymentProvider = order.PaymentProvider
+	} else if order.PaymentProvider != "" && topup.PaymentProvider != order.PaymentProvider {
+		return ErrPaymentMethodMismatch
+	}
 	if topup.PaymentMethod == "" {
 		topup.PaymentMethod = order.PaymentMethod
 	} else if topup.PaymentMethod != order.PaymentMethod {

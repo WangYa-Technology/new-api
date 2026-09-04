@@ -21,7 +21,7 @@ build-all-web: build-web
 
 start-api:
 	@echo "Starting api dev server..."
-	@cd $(API_DIR) && go run main.go &
+	@cd $(API_DIR) && GIN_MODE=debug DISABLE_RATE_LIMIT=true go run main.go &
 
 dev-api:
 	@echo "Starting api services (docker)..."

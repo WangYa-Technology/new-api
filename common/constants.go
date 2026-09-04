@@ -196,6 +196,10 @@ var (
 // All duration's unit is seconds
 // Shouldn't larger then RateLimitKeyExpirationDuration
 var (
+	// RateLimitDisabled is intended for local development only. It is populated
+	// from DISABLE_RATE_LIMIT during environment initialization.
+	RateLimitDisabled bool
+
 	GlobalApiRateLimitEnable   bool
 	GlobalApiRateLimitNum      int
 	GlobalApiRateLimitDuration int64

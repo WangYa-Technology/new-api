@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Crown, CalendarClock, Package } from 'lucide-react'
+import {
+  ArrowRight,
+  CalendarClock,
+  Crown,
+  Loader2,
+  Package,
+  WalletCards,
+} from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -25,16 +32,11 @@ import { Dialog } from '@/components/dialog'
 import { GroupBadge } from '@/components/group-badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { getPaymentIcon } from '@/features/wallet/lib'
+import type { PaymentMethod } from '@/features/wallet/types'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
@@ -47,11 +49,6 @@ import {
 } from '../../api'
 import { formatDuration, formatResetPeriod } from '../../lib'
 import type { PlanRecord } from '../../types'
-
-interface PaymentMethod {
-  type: string
-  name?: string
-}
 
 interface Props {
   open: boolean
@@ -72,15 +69,36 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const { t } = useTranslation()
   const { currency } = useSystemConfig()
   const [paying, setPaying] = useState(false)
-  const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('')
 
   useEffect(() => {
-    if (props.open && props.epayMethods && props.epayMethods.length > 0) {
-      setSelectedEpayMethod(props.epayMethods[0].type)
-    } else if (!props.open) {
-      setSelectedEpayMethod('')
+    if (!props.open) {
+      setSelectedPaymentMethod('')
+      return
     }
-  }, [props.open, props.epayMethods])
+    if (props.plan?.plan?.allow_balance_pay !== false) {
+      setSelectedPaymentMethod('balance')
+    } else if (props.enableOnlineTopUp && props.epayMethods?.[0]) {
+      setSelectedPaymentMethod(`epay:${props.epayMethods[0].type}`)
+    } else if (props.enableStripe && props.plan?.plan?.stripe_price_id) {
+      setSelectedPaymentMethod('stripe')
+    } else if (props.enableCreem && props.plan?.plan?.creem_product_id) {
+      setSelectedPaymentMethod('creem')
+    } else if (
+      props.enableWaffoPancake &&
+      props.plan?.plan?.waffo_pancake_product_id
+    ) {
+      setSelectedPaymentMethod('waffo_pancake')
+    }
+  }, [
+    props.open,
+    props.epayMethods,
+    props.enableOnlineTopUp,
+    props.enableStripe,
+    props.enableCreem,
+    props.enableWaffoPancake,
+    props.plan,
+  ])
 
   const plan = props.plan?.plan
   if (!plan) return null
@@ -92,13 +110,11 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const hasEpay =
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
   const hasAnyPayment = hasStripe || hasCreem || hasWaffoPancake || hasEpay
-  const selectedEpayMethodLabel =
-    (props.epayMethods || []).find((m) => m.type === selectedEpayMethod)
-      ?.name ||
-    selectedEpayMethod ||
-    t('Select payment method')
+  const selectedEpayMethod = selectedPaymentMethod.startsWith('epay:')
+    ? selectedPaymentMethod.slice(5)
+    : ''
   const totalAmount = Number(plan.total_amount || 0)
-  const price = Number(plan.price_amount || 0).toFixed(2)
+  const price = formatBillingCurrencyFromUSD(Number(plan.price_amount || 0))
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
@@ -113,6 +129,28 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const limitReached =
     (props.purchaseLimit || 0) > 0 &&
     (props.purchaseCount || 0) >= (props.purchaseLimit || 0)
+
+  const handlePaymentContinue = () => {
+    if (limitReached || paying || !selectedPaymentMethod) return
+    switch (selectedPaymentMethod) {
+      case 'balance':
+        void handlePayBalance()
+        break
+      case 'stripe':
+        void handlePayStripe()
+        break
+      case 'creem':
+        void handlePayCreem()
+        break
+      case 'waffo_pancake':
+        void handlePayWaffoPancake()
+        break
+      default:
+        if (selectedPaymentMethod.startsWith('epay:')) {
+          void handlePayEpay()
+        }
+    }
+  }
 
   const handlePayStripe = async () => {
     setPaying(true)
@@ -265,12 +303,150 @@ export function SubscriptionPurchaseDialog(props: Props) {
           {t('Purchase Subscription')}
         </>
       }
-      contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-md'
+      contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-xl'
       titleClassName='flex items-center gap-2'
       contentHeight='auto'
       bodyClassName='space-y-4'
     >
       <div className='space-y-3 sm:space-y-4'>
+        {hasAnyPayment || allowBalancePay ? (
+          <div className='space-y-2.5 sm:space-y-3'>
+            <p className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
+              {t('Payment Method')}
+            </p>
+            <div
+              role='radiogroup'
+              aria-label={t('Payment Method')}
+              className='bg-muted/20 flex min-w-0 gap-1 overflow-x-auto rounded-xl border p-1'
+            >
+              {allowBalancePay && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  role='radio'
+                  aria-checked={selectedPaymentMethod === 'balance'}
+                  onClick={() => setSelectedPaymentMethod('balance')}
+                  disabled={paying || limitReached}
+                  className={`min-w-[128px] flex-1 gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                    selectedPaymentMethod === 'balance'
+                      ? 'border-primary bg-primary/10 text-primary ring-primary/20 shadow-xs ring-1'
+                      : 'bg-background hover:border-border hover:bg-background border-transparent'
+                  }`}
+                >
+                  <WalletCards className='h-4 w-4' />
+                  {t('Balance')}
+                </Button>
+              )}
+              {hasEpay &&
+                props.epayMethods?.map((method) => {
+                  const value = `epay:${method.type}`
+                  const selected = selectedPaymentMethod === value
+                  return (
+                    <Button
+                      key={value}
+                      type='button'
+                      variant='ghost'
+                      role='radio'
+                      aria-checked={selected}
+                      onClick={() => setSelectedPaymentMethod(value)}
+                      disabled={paying || limitReached}
+                      className={`min-w-[128px] flex-1 gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                        selected
+                          ? 'border-primary bg-primary/10 text-primary ring-primary/20 shadow-xs ring-1'
+                          : 'bg-background hover:border-border hover:bg-background border-transparent'
+                      }`}
+                    >
+                      {getPaymentIcon(
+                        method.type,
+                        'h-4 w-4',
+                        method.icon,
+                        method.name
+                      )}
+                      <span className='truncate'>
+                        {method.name || method.type}
+                      </span>
+                    </Button>
+                  )
+                })}
+              {hasStripe && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  role='radio'
+                  aria-checked={selectedPaymentMethod === 'stripe'}
+                  onClick={() => setSelectedPaymentMethod('stripe')}
+                  disabled={paying || limitReached}
+                  className={`min-w-[112px] flex-1 gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                    selectedPaymentMethod === 'stripe'
+                      ? 'border-primary bg-primary/10 text-primary ring-primary/20 shadow-xs ring-1'
+                      : 'bg-background hover:border-border hover:bg-background border-transparent'
+                  }`}
+                >
+                  {getPaymentIcon('stripe', 'h-4 w-4')}
+                  Stripe
+                </Button>
+              )}
+              {hasCreem && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  role='radio'
+                  aria-checked={selectedPaymentMethod === 'creem'}
+                  onClick={() => setSelectedPaymentMethod('creem')}
+                  disabled={paying || limitReached}
+                  className={`min-w-[112px] flex-1 gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                    selectedPaymentMethod === 'creem'
+                      ? 'border-primary bg-primary/10 text-primary ring-primary/20 shadow-xs ring-1'
+                      : 'bg-background hover:border-border hover:bg-background border-transparent'
+                  }`}
+                >
+                  {getPaymentIcon('creem', 'h-4 w-4')}
+                  Creem
+                </Button>
+              )}
+              {hasWaffoPancake && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  role='radio'
+                  aria-checked={selectedPaymentMethod === 'waffo_pancake'}
+                  onClick={() => setSelectedPaymentMethod('waffo_pancake')}
+                  disabled={paying || limitReached}
+                  className={`min-w-[150px] flex-1 gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                    selectedPaymentMethod === 'waffo_pancake'
+                      ? 'border-primary bg-primary/10 text-primary ring-primary/20 shadow-xs ring-1'
+                      : 'bg-background hover:border-border hover:bg-background border-transparent'
+                  }`}
+                >
+                  {getPaymentIcon('waffo_pancake', 'h-4 w-4')}
+                  Waffo Pancake
+                </Button>
+              )}
+            </div>
+            {selectedPaymentMethod === 'balance' && (
+              <div className='bg-muted/20 flex flex-col gap-2 rounded-lg border p-3'>
+                <div className='flex items-center justify-between gap-2 text-xs'>
+                  <span className='text-muted-foreground'>{t('Required')}</span>
+                  <span>{formatQuota(balanceCost)}</span>
+                </div>
+                <div className='flex items-center justify-between gap-2 text-xs'>
+                  <span className='text-muted-foreground'>
+                    {t('Available')}
+                  </span>
+                  <span>{formatQuota(userQuota)}</span>
+                </div>
+                {insufficientBalance && (
+                  <Alert variant='destructive'>
+                    <AlertDescription>
+                      {t('Insufficient balance')}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
+
         <div className='bg-muted/50 space-y-2.5 rounded-lg border p-3 sm:space-y-3 sm:p-4'>
           <div className='flex justify-between'>
             <span className='text-muted-foreground text-sm'>
@@ -317,7 +493,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
           <Separator />
           <div className='flex items-center justify-between'>
             <span className='text-sm font-medium'>{t('Amount Due')}</span>
-            <span className='text-primary text-lg font-bold'>${price}</span>
+            <span className='text-primary text-lg font-bold'>{price}</span>
           </div>
         </div>
 
@@ -330,113 +506,31 @@ export function SubscriptionPurchaseDialog(props: Props) {
           </Alert>
         )}
 
-        <div className='flex flex-col gap-2 rounded-md border p-3'>
-          <div className='flex items-center justify-between gap-2 text-xs'>
-            <span className='text-muted-foreground'>{t('Required')}</span>
-            <span>{formatQuota(balanceCost)}</span>
-          </div>
-          <div className='flex items-center justify-between gap-2 text-xs'>
-            <span className='text-muted-foreground'>{t('Available')}</span>
-            <span>{formatQuota(userQuota)}</span>
-          </div>
-          {!allowBalancePay ? (
-            <Alert variant='destructive'>
-              <AlertDescription>
-                {t('This plan does not allow balance redemption')}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            insufficientBalance && (
-              <Alert variant='destructive'>
-                <AlertDescription>{t('Insufficient balance')}</AlertDescription>
-              </Alert>
-            )
-          )}
+        {!hasAnyPayment && !allowBalancePay && (
+          <Alert>
+            <AlertDescription>
+              {t('No payment methods available. Please contact administrator.')}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {(hasAnyPayment || allowBalancePay) && (
           <Button
-            variant='outline'
-            onClick={handlePayBalance}
+            type='button'
+            className='h-11 w-full gap-2 text-sm font-semibold sm:h-12'
+            onClick={handlePaymentContinue}
             disabled={
-              paying || limitReached || !allowBalancePay || insufficientBalance
+              paying ||
+              limitReached ||
+              !selectedPaymentMethod ||
+              (selectedPaymentMethod === 'balance' &&
+                (!allowBalancePay || insufficientBalance))
             }
           >
-            {t('Pay with Balance')}
+            {paying && <Loader2 className='h-4 w-4 animate-spin' />}
+            {t('Continue')}
+            {!paying && <ArrowRight className='h-4 w-4' />}
           </Button>
-        </div>
-
-        {hasAnyPayment && (
-          <div className='space-y-3'>
-            <p className='text-muted-foreground text-xs'>
-              {t('Select payment method')}
-            </p>
-            {(hasStripe || hasCreem || hasWaffoPancake) && (
-              <div className='grid grid-cols-2 gap-2 sm:flex'>
-                {hasStripe && (
-                  <Button
-                    variant='outline'
-                    className='flex-1'
-                    onClick={handlePayStripe}
-                    disabled={paying || limitReached}
-                  >
-                    Stripe
-                  </Button>
-                )}
-                {hasCreem && (
-                  <Button
-                    variant='outline'
-                    className='flex-1'
-                    onClick={handlePayCreem}
-                    disabled={paying || limitReached}
-                  >
-                    Creem
-                  </Button>
-                )}
-                {hasWaffoPancake && (
-                  <Button
-                    variant='outline'
-                    className='flex-1'
-                    onClick={handlePayWaffoPancake}
-                    disabled={paying || limitReached}
-                  >
-                    Waffo Pancake
-                  </Button>
-                )}
-              </div>
-            )}
-            {hasEpay && (
-              <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
-                <Select
-                  items={[
-                    ...(props.epayMethods || []).map((m) => ({
-                      value: m.type,
-                      label: m.name || m.type,
-                    })),
-                  ]}
-                  value={selectedEpayMethod}
-                  onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
-                  disabled={limitReached}
-                >
-                  <SelectTrigger className='flex-1'>
-                    <SelectValue>{selectedEpayMethodLabel}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectGroup>
-                      {(props.epayMethods || []).map((m) => (
-                        <SelectItem key={m.type} value={m.type}>
-                          {m.name || m.type}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={handlePayEpay}
-                  disabled={paying || !selectedEpayMethod || limitReached}
-                >
-                  {t('Pay')}
-                </Button>
-              </div>
-            )}
-          </div>
         )}
       </div>
     </Dialog>

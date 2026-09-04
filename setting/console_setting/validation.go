@@ -68,6 +68,15 @@ type FooterConfig struct {
 	Columns     []FooterColumn     `json:"columns"`
 }
 
+type WalletPromotionConfig struct {
+	Enabled     bool   `json:"enabled"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	ActionLabel string `json:"actionLabel"`
+	ActionURL   string `json:"actionUrl"`
+	ImageURL    string `json:"imageUrl"`
+}
+
 func parseJSONArray(jsonStr string, typeName string) ([]map[string]interface{}, error) {
 	var list []map[string]interface{}
 	if err := common.UnmarshalJsonStr(jsonStr, &list); err != nil {
@@ -159,6 +168,39 @@ func validateFooterLinkURL(value string) bool {
 	}
 }
 
+func validateWalletPromotionActionURL(value string) bool {
+	if value == "" || value != strings.TrimSpace(value) || exceedsMaxCharacters(value, 500) {
+		return false
+	}
+	if strings.ContainsAny(value, "\r\n\\") {
+		return false
+	}
+	if strings.HasPrefix(value, "/") {
+		return !strings.HasPrefix(value, "//")
+	}
+
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	return (strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")) && parsed.Host != ""
+}
+
+func validateWalletPromotionImageURL(value string) bool {
+	if value == "" || value != strings.TrimSpace(value) || exceedsMaxCharacters(value, 500) {
+		return false
+	}
+	if strings.ContainsAny(value, "\r\n\\") {
+		return false
+	}
+
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	return (strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")) && parsed.Host != ""
+}
+
 func validateFooterLink(id string, label string, href string, location string) error {
 	if id == "" || !slugRegex.MatchString(id) || exceedsMaxCharacters(id, 64) {
 		return fmt.Errorf("%s的ID格式不正确", location)
@@ -244,6 +286,48 @@ func validateFooterConfig(settingsStr string) error {
 	return nil
 }
 
+func parseWalletPromotionConfig(settingsStr string) (WalletPromotionConfig, error) {
+	var promotion WalletPromotionConfig
+	if err := common.UnmarshalJsonStr(settingsStr, &promotion); err != nil {
+		return WalletPromotionConfig{}, fmt.Errorf("钱包页推广配置格式错误：%s", err.Error())
+	}
+	return promotion, nil
+}
+
+func validateWalletPromotionConfig(settingsStr string) error {
+	promotion, err := parseWalletPromotionConfig(settingsStr)
+	if err != nil {
+		return err
+	}
+	if exceedsMaxCharacters(promotion.Title, 80) {
+		return fmt.Errorf("钱包页推广标题不能超过80字符")
+	}
+	if exceedsMaxCharacters(promotion.Description, 240) {
+		return fmt.Errorf("钱包页推广说明不能超过240字符")
+	}
+	if promotion.Enabled && strings.TrimSpace(promotion.Title) == "" {
+		return fmt.Errorf("启用钱包页推广时必须填写标题")
+	}
+
+	hasActionLabel := promotion.ActionLabel != ""
+	hasActionURL := promotion.ActionURL != ""
+	if hasActionLabel != hasActionURL {
+		return fmt.Errorf("钱包页推广的操作文案和链接地址必须同时填写")
+	}
+	if hasActionLabel {
+		if strings.TrimSpace(promotion.ActionLabel) == "" || exceedsMaxCharacters(promotion.ActionLabel, 40) {
+			return fmt.Errorf("钱包页推广的操作文案为空或超过40字符")
+		}
+		if !validateWalletPromotionActionURL(promotion.ActionURL) {
+			return fmt.Errorf("钱包页推广的链接地址不合法")
+		}
+	}
+	if promotion.ImageURL != "" && !validateWalletPromotionImageURL(promotion.ImageURL) {
+		return fmt.Errorf("钱包页推广的图片地址不合法")
+	}
+	return nil
+}
+
 func getJSONList(jsonStr string) []map[string]interface{} {
 	if jsonStr == "" {
 		return []map[string]interface{}{}
@@ -271,6 +355,8 @@ func ValidateConsoleSettings(settingsStr string, settingType string) error {
 		return validateSupportLinks(settingsStr)
 	case "Footer":
 		return validateFooterConfig(settingsStr)
+	case "WalletPromotion":
+		return validateWalletPromotionConfig(settingsStr)
 	default:
 		return fmt.Errorf("未知的设置类型：%s", settingType)
 	}
@@ -376,6 +462,18 @@ func GetFooterConfig() *FooterConfig {
 		return nil
 	}
 	return &footer
+}
+
+func GetWalletPromotionConfig() *WalletPromotionConfig {
+	value := GetConsoleSetting().WalletPromotion
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	promotion, err := parseWalletPromotionConfig(value)
+	if err != nil || validateWalletPromotionConfig(value) != nil {
+		return nil
+	}
+	return &promotion
 }
 
 func validateApiInfo(apiInfoStr string) error {

@@ -16,10 +16,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { describe, expect, test } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { calculateAmount } from '../api'
 import { PAYMENT_TYPES } from '../constants'
-import { requestPaymentAmount } from './use-payment'
+import type { AmountResponse } from '../types'
+import { requestPaymentAmount, usePayment } from './use-payment'
+
+vi.mock('../api', () => ({
+  calculateAmount: vi.fn(),
+  calculateStripeAmount: vi.fn(),
+  calculateWaffoAmount: vi.fn(),
+  calculateWaffoPancakeAmount: vi.fn(),
+  requestPayment: vi.fn(),
+  requestStripePayment: vi.fn(),
+  isApiSuccess: (response: { success?: boolean }) => !!response.success,
+}))
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('payment amount routing', () => {
   test('uses the dedicated Waffo amount calculator', async () => {
@@ -45,5 +62,47 @@ describe('payment amount routing', () => {
 
     expect(amount).toBe(18.75)
     expect(calls).toEqual(['waffo:120'])
+  })
+
+  test('retains the latest payment amount when an earlier calculation resolves last', async () => {
+    let resolveFirst: (response: AmountResponse) => void = () => undefined
+    let resolveSecond: (response: AmountResponse) => void = () => undefined
+    vi.mocked(calculateAmount)
+      .mockImplementationOnce(
+        () =>
+          new Promise<AmountResponse>((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<AmountResponse>((resolve) => {
+            resolveSecond = resolve
+          })
+      )
+    const { result } = renderHook(() => usePayment())
+
+    let firstCalculation: Promise<number>
+    let secondCalculation: Promise<number>
+    act(() => {
+      firstCalculation = result.current.calculatePaymentAmount(10, 'first')
+      secondCalculation = result.current.calculatePaymentAmount(20, 'second')
+    })
+
+    await act(async () => {
+      resolveSecond({ success: true, data: '20' })
+      await secondCalculation
+    })
+
+    expect(result.current.amount).toBe(20)
+    expect(result.current.calculating).toBe(false)
+
+    await act(async () => {
+      resolveFirst({ success: true, data: '10' })
+      await firstCalculation
+    })
+
+    expect(result.current.amount).toBe(20)
+    expect(result.current.calculating).toBe(false)
   })
 })

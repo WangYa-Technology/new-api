@@ -16,10 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Receipt } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Dialog } from '@/components/dialog'
 import { SectionPageLayout } from '@/components/layout'
+import { Button } from '@/components/ui/button'
+import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
+import type { PlanRecord } from '@/features/subscriptions/types'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -30,8 +35,12 @@ import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
+import { RedemptionCodeCard } from './components/redemption-code-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
+import { WalletActionCard } from './components/wallet-action-card'
+import { WalletPromotionBanner } from './components/wallet-promotion-banner'
 import { WalletStatsCard } from './components/wallet-stats-card'
+import { WalletSubscriptionOverview } from './components/wallet-subscription-overview'
 import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from './constants'
 import {
   useTopupInfo,
@@ -70,19 +79,35 @@ export function Wallet(props: WalletProps) {
   const [selectedWaffoMethodIndex, setSelectedWaffoMethodIndex] = useState<
     number | null
   >(null)
-  const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [rechargeDialogOpen, setRechargeDialogOpen] = useState(false)
+  const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false)
+  const [subscriptionPurchaseDialogOpen, setSubscriptionPurchaseDialogOpen] =
+    useState(false)
+  const [selectedSubscriptionPlan, setSelectedSubscriptionPlan] =
+    useState<PlanRecord | null>(null)
+  const [
+    selectedSubscriptionPurchaseCount,
+    setSelectedSubscriptionPurchaseCount,
+  ] = useState(0)
+  const [subscriptionRefreshKey, setSubscriptionRefreshKey] = useState(0)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [billingDialogOpen, setBillingDialogOpen] = useState(false)
   const [redemptionCode, setRedemptionCode] = useState('')
   const [creemDialogOpen, setCreemDialogOpen] = useState(false)
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
-  const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
   const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
+  const subscriptionEpayMethods = useMemo(
+    () =>
+      (topupInfo?.pay_methods || []).filter(
+        (method) => method.type !== 'stripe' && method.type !== 'creem'
+      ),
+    [topupInfo?.pay_methods]
+  )
 
   // Calculate effective exchange rate - when display type is USD, use rate of 1
   const effectiveUsdExchangeRate = useMemo(() => {
@@ -147,6 +172,27 @@ export function Wallet(props: WalletProps) {
       // Calculate initial payment amount with default payment type
       const defaultPaymentType = getDefaultPaymentType(topupInfo)
       calculatePaymentAmount(minTopup, defaultPaymentType)
+
+      if (
+        defaultPaymentType === PAYMENT_TYPES.WAFFO &&
+        topupInfo.waffo_pay_methods?.[0]
+      ) {
+        const method = topupInfo.waffo_pay_methods[0]
+        setSelectedPaymentMethod({
+          name: method.name,
+          type: PAYMENT_TYPES.WAFFO,
+          icon: method.icon,
+          min_topup: topupInfo.waffo_min_topup,
+        })
+        setSelectedWaffoMethodIndex(0)
+      } else {
+        const defaultMethod = topupInfo.pay_methods?.find(
+          (method) => method.type === defaultPaymentType
+        )
+        if (defaultMethod) {
+          setSelectedPaymentMethod(defaultMethod)
+        }
+      }
     }
   }, [topupInfo, calculatePaymentAmount])
 
@@ -170,24 +216,31 @@ export function Wallet(props: WalletProps) {
   }
 
   // Handle payment method selection
-  const handlePaymentMethodSelect = async (method: PaymentMethod) => {
+  const handlePaymentMethodSelect = (method: PaymentMethod) => {
     setSelectedPaymentMethod(method)
     setSelectedWaffoMethodIndex(null)
-    setPaymentLoading(method.type)
+    void calculatePaymentAmount(topupAmount, method.type)
+  }
 
-    try {
-      // Validate minimum topup
-      const minTopup = getMinTopupAmount(topupInfo)
-      if (topupAmount < minTopup) {
-        return
-      }
+  const handlePaymentContinue = async () => {
+    if (!selectedPaymentMethod) return
 
-      // Calculate payment amount and show confirmation dialog
-      await calculatePaymentAmount(topupAmount, method.type)
-      setConfirmDialogOpen(true)
-    } finally {
-      setPaymentLoading(null)
+    const minimum = Math.max(
+      selectedPaymentMethod.min_topup || 0,
+      selectedPaymentMethod.type === PAYMENT_TYPES.WAFFO
+        ? topupInfo?.waffo_min_topup || 0
+        : getMinTopupAmount(topupInfo)
+    )
+    if (topupAmount < minimum) return
+
+    if (selectedPaymentMethod.type === PAYMENT_TYPES.WAFFO) {
+      if (selectedWaffoMethodIndex === null) return
+      await calculatePaymentAmount(topupAmount, PAYMENT_TYPES.WAFFO)
+    } else {
+      await calculatePaymentAmount(topupAmount, selectedPaymentMethod.type)
     }
+    setRechargeDialogOpen(false)
+    setConfirmDialogOpen(true)
   }
 
   // Handle payment confirmation
@@ -234,6 +287,7 @@ export function Wallet(props: WalletProps) {
   // Handle Creem product selection
   const handleCreemProductSelect = (product: CreemProduct) => {
     setSelectedCreemProduct(product)
+    setRechargeDialogOpen(false)
     setCreemDialogOpen(true)
   }
 
@@ -249,25 +303,14 @@ export function Wallet(props: WalletProps) {
     }
   }
 
-  const handleWaffoMethodSelect = async (
-    method: WaffoPayMethod,
-    index: number
-  ) => {
-    const loadingKey = `waffo-${index}`
+  const handleWaffoMethodSelect = (method: WaffoPayMethod, index: number) => {
     setSelectedPaymentMethod({
       name: method.name,
       type: PAYMENT_TYPES.WAFFO,
       icon: method.icon,
+      min_topup: topupInfo?.waffo_min_topup,
     })
     setSelectedWaffoMethodIndex(index)
-    setPaymentLoading(loadingKey)
-
-    try {
-      await calculatePaymentAmount(topupAmount, PAYMENT_TYPES.WAFFO)
-      setConfirmDialogOpen(true)
-    } finally {
-      setPaymentLoading(null)
-    }
   }
 
   // Get discount rate for current topup amount
@@ -275,69 +318,62 @@ export function Wallet(props: WalletProps) {
     return topupInfo?.discount?.[topupAmount] || DEFAULT_DISCOUNT_RATE
   }, [topupInfo, topupAmount])
 
-  const handleSubscriptionAvailabilityChange = useCallback(
-    (available: boolean) => {
-      setShowSubscriptionPanel(available)
-    },
-    []
-  )
-
   return (
     <>
       <SectionPageLayout>
         <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
+        <SectionPageLayout.Actions>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className='inline-flex items-center gap-2'
+            onClick={() => setBillingDialogOpen(true)}
+          >
+            <Receipt className='size-4' />
+            {t('Order History')}
+          </Button>
+        </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-            <WalletStatsCard user={user} loading={userLoading} />
-
             <div
-              className={
-                showSubscriptionPanel
-                  ? 'grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:items-start'
-                  : 'grid gap-4'
-              }
+              data-testid='wallet-header'
+              className='bg-card overflow-hidden rounded-lg border'
             >
-              <div id='wallet-add-funds' className='scroll-mt-4'>
-                <RechargeFormCard
-                  topupInfo={topupInfo}
-                  presetAmounts={presetAmounts}
-                  selectedPreset={selectedPreset}
-                  onSelectPreset={handleSelectPreset}
-                  topupAmount={topupAmount}
-                  onTopupAmountChange={handleTopupAmountChange}
-                  paymentAmount={paymentAmount}
-                  calculating={calculating}
-                  onPaymentMethodSelect={handlePaymentMethodSelect}
-                  paymentLoading={paymentLoading}
-                  redemptionCode={redemptionCode}
-                  onRedemptionCodeChange={setRedemptionCode}
-                  onRedeem={handleRedeem}
-                  redeeming={redeeming}
-                  topupLink={topupInfo?.topup_link}
-                  loading={topupLoading}
-                  priceRatio={(status?.price as number) || 1}
-                  usdExchangeRate={effectiveUsdExchangeRate}
-                  onOpenBilling={() => setBillingDialogOpen(true)}
-                  creemProducts={topupInfo?.creem_products}
-                  enableCreemTopup={topupInfo?.enable_creem_topup}
-                  onCreemProductSelect={handleCreemProductSelect}
-                  enableWaffoTopup={topupInfo?.enable_waffo_topup}
-                  waffoPayMethods={topupInfo?.waffo_pay_methods}
-                  waffoMinTopup={topupInfo?.waffo_min_topup}
-                  onWaffoMethodSelect={handleWaffoMethodSelect}
-                  enableWaffoPancakeTopup={
-                    topupInfo?.enable_waffo_pancake_topup
-                  }
-                />
-              </div>
-
-              <SubscriptionPlansCard
-                topupInfo={topupInfo}
-                onAvailabilityChange={handleSubscriptionAvailabilityChange}
-                userQuota={user?.quota}
-                onPurchaseSuccess={fetchUser}
+              <WalletStatsCard
+                embedded
+                user={user}
+                loading={userLoading}
+                subscription={
+                  <WalletSubscriptionOverview
+                    refreshKey={subscriptionRefreshKey}
+                  />
+                }
               />
             </div>
+
+            <WalletPromotionBanner config={status?.wallet_promotion} />
+
+            <div className='grid gap-3 sm:grid-cols-2'>
+              <WalletActionCard
+                kind='recharge'
+                onClick={() => setRechargeDialogOpen(true)}
+              />
+              <WalletActionCard
+                kind='subscription'
+                onClick={() => setSubscriptionDialogOpen(true)}
+              />
+            </div>
+
+            <RedemptionCodeCard
+              topupInfo={topupInfo}
+              redemptionCode={redemptionCode}
+              onRedemptionCodeChange={setRedemptionCode}
+              onRedeem={handleRedeem}
+              redeeming={redeeming}
+              topupLink={topupInfo?.topup_link}
+              loading={topupLoading}
+            />
 
             <AffiliateRewardsCard
               user={user}
@@ -384,6 +420,96 @@ export function Wallet(props: WalletProps) {
         onConfirm={handleCreemConfirm}
         product={selectedCreemProduct}
         processing={creemProcessing}
+      />
+
+      <Dialog
+        open={rechargeDialogOpen}
+        onOpenChange={setRechargeDialogOpen}
+        title={t('Add Funds')}
+        description={t('Choose an amount and payment method')}
+        contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-2xl'
+        bodyClassName='space-y-4'
+      >
+        <RechargeFormCard
+          embedded
+          topupInfo={topupInfo}
+          presetAmounts={presetAmounts}
+          selectedPreset={selectedPreset}
+          onSelectPreset={handleSelectPreset}
+          topupAmount={topupAmount}
+          onTopupAmountChange={handleTopupAmountChange}
+          paymentAmount={paymentAmount}
+          calculating={calculating}
+          onPaymentMethodSelect={handlePaymentMethodSelect}
+          onPaymentContinue={handlePaymentContinue}
+          selectedPaymentMethod={selectedPaymentMethod}
+          selectedWaffoMethodIndex={selectedWaffoMethodIndex}
+          redemptionCode={redemptionCode}
+          onRedemptionCodeChange={setRedemptionCode}
+          onRedeem={handleRedeem}
+          redeeming={redeeming}
+          topupLink={topupInfo?.topup_link}
+          showRedemption={false}
+          loading={topupLoading}
+          priceRatio={(status?.price as number) || 1}
+          usdExchangeRate={effectiveUsdExchangeRate}
+          creemProducts={topupInfo?.creem_products}
+          enableCreemTopup={topupInfo?.enable_creem_topup}
+          onCreemProductSelect={handleCreemProductSelect}
+          enableWaffoTopup={topupInfo?.enable_waffo_topup}
+          waffoPayMethods={topupInfo?.waffo_pay_methods}
+          waffoMinTopup={topupInfo?.waffo_min_topup}
+          onWaffoMethodSelect={handleWaffoMethodSelect}
+          enableWaffoPancakeTopup={topupInfo?.enable_waffo_pancake_topup}
+        />
+      </Dialog>
+
+      <Dialog
+        open={subscriptionDialogOpen}
+        onOpenChange={setSubscriptionDialogOpen}
+        title={t('Purchase Subscription')}
+        description={t('Subscribe to a plan for model access')}
+        contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-4xl'
+        bodyClassName='space-y-4'
+      >
+        <SubscriptionPlansCard
+          embedded
+          showOverview={false}
+          topupInfo={topupInfo}
+          onPlanSelect={(plan, purchaseCount) => {
+            setSelectedSubscriptionPlan(plan)
+            setSelectedSubscriptionPurchaseCount(purchaseCount)
+            setSubscriptionDialogOpen(false)
+            setSubscriptionPurchaseDialogOpen(true)
+          }}
+          userQuota={user?.quota}
+          onPurchaseSuccess={fetchUser}
+          refreshKey={subscriptionRefreshKey}
+        />
+      </Dialog>
+
+      <SubscriptionPurchaseDialog
+        open={subscriptionPurchaseDialogOpen}
+        onOpenChange={(open) => {
+          setSubscriptionPurchaseDialogOpen(open)
+          if (!open) {
+            setSubscriptionRefreshKey((value) => value + 1)
+          }
+        }}
+        plan={selectedSubscriptionPlan}
+        enableStripe={!!topupInfo?.enable_stripe_topup}
+        enableCreem={!!topupInfo?.enable_creem_topup}
+        enableWaffoPancake={!!topupInfo?.enable_waffo_pancake_topup}
+        enableOnlineTopUp={!!topupInfo?.enable_online_topup}
+        epayMethods={subscriptionEpayMethods}
+        userQuota={user?.quota}
+        onPurchaseSuccess={fetchUser}
+        purchaseLimit={
+          selectedSubscriptionPlan?.plan?.max_purchase_per_user
+            ? Number(selectedSubscriptionPlan.plan.max_purchase_per_user)
+            : undefined
+        }
+        purchaseCount={selectedSubscriptionPurchaseCount}
       />
     </>
   )

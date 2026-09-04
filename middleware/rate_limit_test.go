@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -113,6 +114,35 @@ func TestRedisEmailVerificationRateLimiterPreservesResponseAndTTL(t *testing.T) 
 	key := redisIPRateLimitKey(EmailVerificationRateLimitMark, "192.0.2.30")
 	assert.True(t, redisServer.Exists(key))
 	assert.Equal(t, time.Duration(EmailVerificationDuration)*time.Second, redisServer.TTL(key))
+}
+
+func TestRateLimitDisabledBypassesAllRateLimitMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousDisabled := common.RateLimitDisabled
+	previousModelRateLimitEnabled := setting.ModelRequestRateLimitEnabled
+	common.RateLimitDisabled = true
+	setting.ModelRequestRateLimitEnabled = true
+	t.Cleanup(func() {
+		common.RateLimitDisabled = previousDisabled
+		setting.ModelRequestRateLimitEnabled = previousModelRateLimitEnabled
+	})
+
+	router := gin.New()
+	router.GET("/web", GlobalWebRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/api", GlobalAPIRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/critical", CriticalRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/user-critical", func(c *gin.Context) { c.Set("id", 1) }, UserCriticalRateLimit("test"), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/search", func(c *gin.Context) { c.Set("id", 1) }, SearchRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/download", DownloadRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/upload", UploadRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/email", EmailVerificationRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/model", ModelRequestRateLimit(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	for _, path := range []string{"/web", "/api", "/critical", "/user-critical", "/search", "/download", "/upload", "/email", "/model"} {
+		for range 3 {
+			assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, path, "192.0.2.70:12345").Code, path)
+		}
+	}
 }
 
 func TestRedisFixedWindowIsAtomicUnderConcurrency(t *testing.T) {

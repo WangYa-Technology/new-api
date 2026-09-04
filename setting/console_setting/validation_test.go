@@ -148,6 +148,34 @@ func TestValidateFooterAcceptsConfigurableLeftLinksAndColumns(t *testing.T) {
 	require.NoError(t, ValidateConsoleSettings(value, "Footer"))
 }
 
+func TestValidateWalletPromotionAcceptsConfiguredContent(t *testing.T) {
+	value := `{
+		"enabled":true,
+		"title":"Welcome bonus",
+		"description":"New users receive extra credit.",
+		"actionLabel":"View offer",
+		"actionUrl":"/offers/welcome",
+		"imageUrl":"https://example.com/promotion.png"
+	}`
+
+	require.NoError(t, ValidateConsoleSettings(value, "WalletPromotion"))
+}
+
+func TestValidateWalletPromotionRejectsUnsafeActionURL(t *testing.T) {
+	value := `{
+		"enabled":true,
+		"title":"Welcome bonus",
+		"description":"",
+		"actionLabel":"View offer",
+		"actionUrl":"javascript:alert(1)",
+		"imageUrl":""
+	}`
+
+	err := ValidateConsoleSettings(value, "WalletPromotion")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "链接地址不合法")
+}
+
 func TestValidateFooterRejectsUnsafeLinkDestinations(t *testing.T) {
 	tests := []struct {
 		name string

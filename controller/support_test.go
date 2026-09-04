@@ -62,3 +62,31 @@ func TestGetStatusReturnsConfiguredFooter(t *testing.T) {
 	require.NotNil(t, payload.Data.Footer)
 	assert.Equal(t, "Custom footer", payload.Data.Footer.Description)
 }
+
+func TestGetStatusReturnsConfiguredWalletPromotion(t *testing.T) {
+	settings := console_setting.GetConsoleSetting()
+	previousPromotion := settings.WalletPromotion
+	settings.WalletPromotion = `{"enabled":true,"title":"Welcome bonus","description":"Extra credit for new accounts","actionLabel":"Learn more","actionUrl":"/offers/welcome","imageUrl":"https://example.com/promotion.png"}`
+	t.Cleanup(func() { settings.WalletPromotion = previousPromotion })
+
+	previousMap := common.OptionMap
+	common.OptionMap = map[string]string{}
+	t.Cleanup(func() { common.OptionMap = previousMap })
+
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+
+	GetStatus(context)
+
+	var payload struct {
+		Success bool `json:"success"`
+		Data    struct {
+			WalletPromotion *console_setting.WalletPromotionConfig `json:"wallet_promotion"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
+	assert.True(t, payload.Success)
+	require.NotNil(t, payload.Data.WalletPromotion)
+	assert.Equal(t, "Welcome bonus", payload.Data.WalletPromotion.Title)
+}

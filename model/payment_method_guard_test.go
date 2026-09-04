@@ -159,6 +159,51 @@ func TestCompleteSubscriptionOrder_RejectsMismatchedPaymentProvider(t *testing.T
 	assert.Nil(t, topUp)
 }
 
+func TestCompleteSubscriptionOrderCopiesPaymentProviderToBillingHistory(t *testing.T) {
+	truncateTables(t)
+
+	insertUserForPaymentGuardTest(t, 203, 0)
+	plan := insertSubscriptionPlanForPaymentGuardTest(t, 302)
+	insertSubscriptionOrderForPaymentGuardTest(t, "sub-provider-history", 203, plan.Id, PaymentProviderEpay)
+
+	err := CompleteSubscriptionOrder("sub-provider-history", `{"provider":"epay"}`, PaymentProviderEpay, "test_wallet")
+	require.NoError(t, err)
+
+	topUp := GetTopUpByTradeNo("sub-provider-history")
+	require.NotNil(t, topUp)
+	assert.Equal(t, PaymentProviderEpay, topUp.PaymentProvider)
+	assert.Equal(t, "test_wallet", topUp.PaymentMethod)
+	assert.Equal(t, plan.PriceAmount, topUp.Money)
+	assert.Equal(t, common.TopUpStatusSuccess, topUp.Status)
+}
+
+func TestCompleteSubscriptionOrderSettlesWhenSameLevelBecameActiveAfterCheckout(t *testing.T) {
+	truncateTables(t)
+
+	insertUserForPaymentGuardTest(t, 204, 0)
+	plan := insertSubscriptionPlanForPaymentGuardTest(t, 303)
+	plan.UpgradeGroup = "pro"
+	require.NoError(t, DB.Save(plan).Error)
+	_, err := CreateUserSubscriptionFromPlanTx(DB, 204, plan, "existing")
+	require.NoError(t, err)
+	insertSubscriptionOrderForPaymentGuardTest(t, "sub-paid-active-race", 204, plan.Id, PaymentProviderStripe)
+
+	err = CompleteSubscriptionOrder("sub-paid-active-race", `{"provider":"stripe"}`, PaymentProviderStripe, "")
+	require.NoError(t, err)
+
+	order := GetSubscriptionOrderByTradeNo("sub-paid-active-race")
+	require.NotNil(t, order)
+	assert.Equal(t, common.TopUpStatusSuccess, order.Status)
+	assert.EqualValues(t, 2, countUserSubscriptionsForPaymentGuardTest(t, 204))
+
+	topUp := GetTopUpByTradeNo("sub-paid-active-race")
+	require.NotNil(t, topUp)
+	assert.Equal(t, common.TopUpStatusSuccess, topUp.Status)
+
+	require.NoError(t, CompleteSubscriptionOrder("sub-paid-active-race", `{"provider":"stripe"}`, PaymentProviderStripe, ""))
+	assert.EqualValues(t, 2, countUserSubscriptionsForPaymentGuardTest(t, 204))
+}
+
 func TestExpireSubscriptionOrder_RejectsMismatchedPaymentProvider(t *testing.T) {
 	truncateTables(t)
 

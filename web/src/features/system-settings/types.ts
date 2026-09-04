@@ -173,6 +173,7 @@ export type ContentSettings = {
   'console_setting.footer': string
   'console_setting.support_links': string
   'console_setting.uptime_kuma_groups': string
+  'console_setting.wallet_promotion': string
   'console_setting.api_info_enabled': boolean
   'console_setting.announcements_enabled': boolean
   'console_setting.faq_enabled': boolean

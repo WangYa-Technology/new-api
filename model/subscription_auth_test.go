@@ -85,6 +85,115 @@ func TestSubscriptionGroupTransitionsPreserveAuthVersionAndSessions(t *testing.T
 	assert.Equal(t, "default", cached.Group)
 }
 
+func TestCreateUserSubscriptionFromPlanRejectsDuplicateActivePlan(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	user := &User{
+		Id:       12001,
+		Username: "subscription-duplicate-user",
+		Password: "unused-password-hash",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+	}
+	require.NoError(t, DB.Create(user).Error)
+
+	plan := &SubscriptionPlan{
+		Id:            12002,
+		Title:         "Duplicate guard plan",
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   100,
+		UpgradeGroup:  "pro",
+		Enabled:       true,
+	}
+	sameLevelPlan := &SubscriptionPlan{
+		Id:            12003,
+		Title:         "Same level annual plan",
+		DurationUnit:  SubscriptionDurationYear,
+		DurationValue: 1,
+		TotalAmount:   100,
+		UpgradeGroup:  "pro",
+		Enabled:       true,
+	}
+	otherLevelPlan := &SubscriptionPlan{
+		Id:            12004,
+		Title:         "Different level plan",
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   100,
+		UpgradeGroup:  "enterprise",
+		Enabled:       true,
+	}
+	require.NoError(t, DB.Create(plan).Error)
+	require.NoError(t, DB.Create(sameLevelPlan).Error)
+	require.NoError(t, DB.Create(otherLevelPlan).Error)
+
+	first, err := CreateUserSubscriptionFromPlanTx(DB, user.Id, plan, "test")
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	hasActive, err := HasActiveUserSubscriptionByPlan(user.Id, sameLevelPlan.Id)
+	require.NoError(t, err)
+	assert.True(t, hasActive)
+	hasDifferentLevel, err := HasActiveUserSubscriptionByPlan(user.Id, otherLevelPlan.Id)
+	require.NoError(t, err)
+	assert.False(t, hasDifferentLevel)
+
+	duplicate, err := CreateUserSubscriptionFromPlanTx(DB, user.Id, sameLevelPlan, "test")
+	require.ErrorIs(t, err, ErrActiveSubscriptionExists)
+	assert.Nil(t, duplicate)
+
+	secondPlan, err := CreateUserSubscriptionFromPlanTx(DB, user.Id, otherLevelPlan, "test")
+	require.NoError(t, err)
+	assert.Equal(t, otherLevelPlan.Id, secondPlan.PlanId)
+
+	first.EndTime = now - 1
+	require.NoError(t, DB.Save(first).Error)
+
+	replacement, err := CreateUserSubscriptionFromPlanTx(DB, user.Id, plan, "test")
+	require.NoError(t, err)
+	assert.Equal(t, plan.Id, replacement.PlanId)
+}
+
+func TestCreateUserSubscriptionFromPlanAllowsDifferentPlansWithoutLevels(t *testing.T) {
+	truncateTables(t)
+
+	user := &User{
+		Id:       12011,
+		Username: "subscription-no-level-user",
+		Password: "unused-password-hash",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+	}
+	require.NoError(t, DB.Create(user).Error)
+
+	firstPlan := &SubscriptionPlan{
+		Id:            12012,
+		Title:         "First plan without level",
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   100,
+		Enabled:       true,
+	}
+	secondPlan := &SubscriptionPlan{
+		Id:            12013,
+		Title:         "Second plan without level",
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   100,
+		Enabled:       true,
+	}
+	require.NoError(t, DB.Create(firstPlan).Error)
+	require.NoError(t, DB.Create(secondPlan).Error)
+
+	_, err := CreateUserSubscriptionFromPlanTx(DB, user.Id, firstPlan, "test")
+	require.NoError(t, err)
+	_, err = CreateUserSubscriptionFromPlanTx(DB, user.Id, secondPlan, "test")
+	require.NoError(t, err)
+}
+
 func TestSubscriptionGroupCacheRefreshFailureDoesNotChangeCommittedResult(t *testing.T) {
 	previousDB, previousLogDB := DB, LOG_DB
 	previousMainDatabaseType, previousLogDatabaseType := common.MainDatabaseType(), common.LogDatabaseType()

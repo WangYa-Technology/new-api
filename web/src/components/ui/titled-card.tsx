@@ -43,6 +43,7 @@ type TitledCardProps = {
   iconTone?: IconBadgeTone
   titleClassName?: string
   descriptionClassName?: string
+  embedded?: boolean
 }
 
 export function TitledCard({
@@ -59,7 +60,12 @@ export function TitledCard({
   iconTone,
   titleClassName,
   descriptionClassName,
+  embedded,
 }: TitledCardProps) {
+  if (embedded) {
+    return <div className={cn('min-w-0', contentClassName)}>{children}</div>
+  }
+
   return (
     <Card
       data-card-hover={disableHoverEffect ? 'false' : undefined}
