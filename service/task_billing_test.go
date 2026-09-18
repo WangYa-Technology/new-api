@@ -1127,6 +1127,7 @@ func TestNonTerminalUpdate_NoBilling(t *testing.T) {
 
 type mockAdaptor struct {
 	adjustReturn int
+	quotaClamp   *common.QuotaClamp
 }
 
 func (m *mockAdaptor) Init(_ *relaycommon.RelayInfo) {}
@@ -1134,7 +1135,8 @@ func (m *mockAdaptor) FetchTask(string, string, map[string]any, string) (*http.R
 	return nil, nil
 }
 func (m *mockAdaptor) ParseTaskResult([]byte) (*relaycommon.TaskInfo, error) { return nil, nil }
-func (m *mockAdaptor) AdjustBillingOnComplete(_ *model.Task, _ *relaycommon.TaskInfo) int {
+func (m *mockAdaptor) AdjustBillingOnComplete(_ *model.Task, taskResult *relaycommon.TaskInfo) int {
+	taskResult.QuotaClamp = m.quotaClamp
 	return m.adjustReturn
 }
 
@@ -1225,4 +1227,39 @@ func TestSettle_NonPerCallBilling_AppliesAdaptorAdjustment(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
+}
+
+func TestSettle_AdaptorAdjustmentRecordsQuotaClamp(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 33, 33, 33
+	const initQuota, preConsumed, actualQuota = 10000, 5000, 3000
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-clamped-adaptor", 8000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	clamp := &common.QuotaClamp{
+		Op:       "QuotaFromFloat",
+		Kind:     common.QuotaClampOverflow,
+		Original: 1e308,
+		Clamped:  common.MaxQuota,
+	}
+	settleTaskBillingOnComplete(ctx, &mockAdaptor{adjustReturn: actualQuota, quotaClamp: clamp}, task, &relaycommon.TaskInfo{
+		Status: model.TaskStatusSuccess,
+	})
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	var other map[string]any
+	require.NoError(t, common.UnmarshalJsonStr(log.Other, &other))
+	adminInfo, ok := other["admin_info"].(map[string]any)
+	require.True(t, ok)
+	saturation, ok := adminInfo["quota_saturation"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, clamp.Op, saturation["op"])
+	assert.Equal(t, string(clamp.Kind), saturation["kind"])
+	assert.Equal(t, clamp.Original, saturation["original"])
+	assert.Equal(t, float64(clamp.Clamped), saturation["clamped"])
 }

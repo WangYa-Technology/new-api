@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/deepseek"
 	"github.com/QuantumNous/new-api/relay/channel/dify"
 	"github.com/QuantumNous/new-api/relay/channel/gemini"
+	"github.com/QuantumNous/new-api/relay/channel/hcai"
 	"github.com/QuantumNous/new-api/relay/channel/jimeng"
 	"github.com/QuantumNous/new-api/relay/channel/jina"
 	"github.com/QuantumNous/new-api/relay/channel/minimax"
@@ -39,7 +40,10 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/task/hailuo"
 	taskjiekou "github.com/QuantumNous/new-api/relay/channel/task/jiekou"
 	taskjimeng "github.com/QuantumNous/new-api/relay/channel/task/jimeng"
+	taskkeyiyun "github.com/QuantumNous/new-api/relay/channel/task/keyiyun"
 	"github.com/QuantumNous/new-api/relay/channel/task/kling"
+	tasknewapi "github.com/QuantumNous/new-api/relay/channel/task/newapi"
+	tasksiliconflow "github.com/QuantumNous/new-api/relay/channel/task/siliconflow"
 	tasksora "github.com/QuantumNous/new-api/relay/channel/task/sora"
 	"github.com/QuantumNous/new-api/relay/channel/task/suno"
 	taskvertex "github.com/QuantumNous/new-api/relay/channel/task/vertex"
@@ -131,6 +135,8 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &sub2api.Adaptor{}
 	case constant.APITypeNewAPI:
 		return &newapi.Adaptor{}
+	case constant.APITypeHCAI:
+		return &hcai.Adaptor{}
 	}
 	return nil
 }
@@ -174,6 +180,12 @@ func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
 			return &taskxai.TaskAdaptor{}
 		case constant.ChannelTypeJiekouSeedance:
 			return &taskjiekou.TaskAdaptor{}
+		case constant.ChannelTypeSiliconFlow:
+			return &tasksiliconflow.TaskAdaptor{}
+		case constant.ChannelTypeKemei:
+			return &tasknewapi.TaskAdaptor{}
+		case constant.ChannelTypeKeyiyun:
+			return &taskkeyiyun.TaskAdaptor{}
 		}
 	}
 	return nil

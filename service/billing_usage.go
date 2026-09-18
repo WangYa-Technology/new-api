@@ -25,15 +25,15 @@ func effectiveBillingUsage(usage *dto.Usage) *dto.Usage {
 }
 
 func usageBillingPathForLog(isLocalCountTokens bool, usage *dto.Usage) string {
-	effectiveUsage, ok := usageFromBillingUsage(usage)
-	if !ok {
+	semantic := billingUsageSemantic(usage)
+	if semantic == "" {
 		if isLocalCountTokens {
 			return usageBillingPathLocal
 		}
 		return usageBillingPathUpstream
 	}
 
-	switch effectiveUsage.UsageSemantic {
+	switch semantic {
 	case dto.BillingUsageSemanticOpenAI:
 		if usage.BillingUsage.Estimated {
 			return usageBillingPathOpenAIEstimated
@@ -58,17 +58,14 @@ func appendUsageBillingPathForLog(other map[string]interface{}, isLocalCountToke
 	if other == nil {
 		return
 	}
-	adminInfo, ok := other["admin_info"].(map[string]interface{})
-	if !ok || adminInfo == nil {
-		adminInfo = make(map[string]interface{})
-		other["admin_info"] = adminInfo
-	}
-	adminInfo["usage_billing_path"] = usageBillingPathForLog(isLocalCountTokens, usage)
+	appendAdminLogField(other, "usage_billing_path", usageBillingPathForLog(isLocalCountTokens, usage))
 }
 
-func usageFromBillingUsage(usage *dto.Usage) (*dto.Usage, bool) {
+// billingUsageSemantic selects the authoritative payload for both settlement
+// and audit logs. Preserve OpenAI > Claude > Gemini precedence when metadata conflicts.
+func billingUsageSemantic(usage *dto.Usage) string {
 	if usage == nil || usage.BillingUsage == nil {
-		return nil, false
+		return ""
 	}
 	billingUsage := usage.BillingUsage
 	source := strings.TrimSpace(billingUsage.Source)
@@ -78,21 +75,33 @@ func usageFromBillingUsage(usage *dto.Usage) (*dto.Usage, bool) {
 		(strings.EqualFold(source, dto.BillingUsageSourceOAIChat) ||
 			strings.EqualFold(source, dto.BillingUsageSourceOAIResponses) ||
 			strings.EqualFold(semantic, dto.BillingUsageSemanticOpenAI)) {
-		return usageFromOpenAIBillingUsage(billingUsage), true
+		return dto.BillingUsageSemanticOpenAI
 	}
 
 	if billingUsage.ClaudeUsage != nil &&
 		(strings.EqualFold(source, dto.BillingUsageSourceClaudeMessages) ||
 			strings.EqualFold(semantic, dto.BillingUsageSemanticAnthropic)) {
-		return usageFromClaudeBillingUsage(billingUsage), true
+		return dto.BillingUsageSemanticAnthropic
 	}
 
 	if billingUsage.GeminiUsageMetadata != nil &&
 		(strings.EqualFold(source, dto.BillingUsageSourceGeminiChat) ||
 			strings.EqualFold(semantic, dto.BillingUsageSemanticGemini)) {
-		return usageFromGeminiBillingUsage(billingUsage), true
+		return dto.BillingUsageSemanticGemini
 	}
 
+	return ""
+}
+
+func usageFromBillingUsage(usage *dto.Usage) (*dto.Usage, bool) {
+	switch billingUsageSemantic(usage) {
+	case dto.BillingUsageSemanticOpenAI:
+		return usageFromOpenAIBillingUsage(usage.BillingUsage), true
+	case dto.BillingUsageSemanticAnthropic:
+		return usageFromClaudeBillingUsage(usage.BillingUsage), true
+	case dto.BillingUsageSemanticGemini:
+		return usageFromGeminiBillingUsage(usage.BillingUsage), true
+	}
 	return nil, false
 }
 

@@ -17,6 +17,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// appendAdminLogField keeps internal audit fields inside the object stripped
+// from non-admin log responses, preserving any existing administrator metadata.
+func appendAdminLogField(other map[string]interface{}, key string, value interface{}) {
+	if other == nil {
+		return
+	}
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	if !ok || adminInfo == nil {
+		adminInfo = make(map[string]interface{})
+		other["admin_info"] = adminInfo
+	}
+	adminInfo[key] = value
+}
+
 // attachQuotaSaturationToOther nests a quota saturation marker under
 // other.admin_info.quota_saturation. Nesting under admin_info makes it
 // admin-only for free, since model.formatUserLogs strips the whole admin_info
@@ -26,12 +40,7 @@ func attachQuotaSaturationToOther(other map[string]interface{}, clamp *common.Qu
 	if clamp == nil || other == nil {
 		return
 	}
-	adminInfo, ok := other["admin_info"].(map[string]interface{})
-	if !ok || adminInfo == nil {
-		adminInfo = map[string]interface{}{}
-		other["admin_info"] = adminInfo
-	}
-	adminInfo["quota_saturation"] = clamp.AuditMap()
+	appendAdminLogField(other, "quota_saturation", clamp.AuditMap())
 }
 
 // attachQuotaSaturation records the request's quota clamp (if any) onto the

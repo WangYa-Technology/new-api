@@ -59,6 +59,9 @@ const (
 	ChannelTypeJiekouSeedance = 59
 	ChannelTypeSub2API        = 60
 	ChannelTypeNewAPI         = 61
+	ChannelTypeHCAI           = 62
+	ChannelTypeKeyiyun        = 63
+	ChannelTypeKemei          = 64
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 )
 
@@ -125,6 +128,9 @@ var ChannelBaseURLs = []string{
 	"https://api.highwayapi.ai",                 //59
 	"",                                          //60
 	"",                                          //61
+	"https://api.hctopup.com",                   //62
+	"https://zcbservice.aizfw.cn/kyyReactApiServer", //63
+	"https://token.xinhankr.com",                    //64
 }
 
 var ChannelTypeNames = map[int]string{
@@ -186,6 +192,9 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeSub2API:        "Sub2API",
 	ChannelTypeNewAPI:         "New API",
 	ChannelTypeJiekouSeedance: "Jiekou Seedance",
+	ChannelTypeHCAI:           "HCAI",
+	ChannelTypeKeyiyun:        "Keyiyun",
+	ChannelTypeKemei:          "Kemei AI",
 }
 
 func GetChannelTypeName(channelType int) string {

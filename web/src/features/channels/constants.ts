@@ -82,12 +82,15 @@ export const CHANNEL_TYPES = {
   59: 'Jiekou Seedance',
   60: 'Sub2API',
   61: 'New API',
+  62: 'HCAI',
+  63: 'Keyiyun',
+  64: 'Kemei AI',
 } as const
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
   1, 14, 33, 24, 43, 3, 41, 48, 61, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15,
   46, 23, 18, 45, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 60, 22, 21, 44, 2,
-  5, 36, 50, 51, 52, 53, 54, 55, 56, 59,
+  5, 36, 50, 51, 52, 53, 54, 55, 56, 59, 62, 63, 64,
 ]
 
 export const CHANNEL_TYPE_OPTIONS: { value: number; label: string }[] = (() => {

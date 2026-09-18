@@ -82,3 +82,9 @@ type TaskAdaptor interface {
 type OpenAIVideoConverter interface {
 	ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error)
 }
+
+// TaskCompletionBillingAdaptor marks task adaptors that can replace an
+// estimated fixed-price pre-charge with an authoritative upstream amount.
+type TaskCompletionBillingAdaptor interface {
+	SupportsCompletionBillingAdjustment() bool
+}

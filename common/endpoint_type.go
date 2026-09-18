@@ -32,7 +32,7 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI}
 	case constant.ChannelTypeXai:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI, constant.EndpointTypeOpenAIResponse}
-	case constant.ChannelTypeSora, constant.ChannelTypeJiekouSeedance:
+	case constant.ChannelTypeSora, constant.ChannelTypeJiekouSeedance, constant.ChannelTypeKeyiyun, constant.ChannelTypeKemei:
 		endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAIVideo}
 	case constant.ChannelTypeMiniMax:
 		if strings.HasPrefix(modelName, "music-") {
@@ -40,6 +40,8 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 		} else {
 			endpointTypes = []constant.EndpointType{constant.EndpointTypeOpenAI}
 		}
+	case constant.ChannelTypeHCAI:
+		return []constant.EndpointType{constant.EndpointTypeImageGeneration}
 	case constant.ChannelTypeSub2API, constant.ChannelTypeNewAPI:
 		endpointTypes = []constant.EndpointType{
 			constant.EndpointTypeOpenAI,

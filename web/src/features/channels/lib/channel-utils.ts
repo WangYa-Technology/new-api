@@ -54,6 +54,9 @@ export function getChannelTypeIcon(type: number): string {
     58: 'NewAPI', // Advanced Custom
     60: 'Sub2API', // Sub2API
     61: 'NewAPI', // New API
+    62: 'OpenAI', // HCAI
+    63: 'OpenAI', // Keyiyun
+    64: 'OpenAI', // Kemei AI
     3: 'Azure', // Azure
 
     // Anthropic

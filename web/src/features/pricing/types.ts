@@ -37,6 +37,7 @@ export type PricingModel = {
   vendor_icon?: string
   vendor_description?: string
   quota_type: number
+  billing_unit?: 'request' | 'second'
   model_ratio: number
   completion_ratio: number
   model_price?: number
@@ -108,4 +109,4 @@ export type PriceType =
   | 'image'
   | 'audio_input'
   | 'audio_output'
-export type QuotaType = 0 | 1 // 0: token-based, 1: per-request
+export type QuotaType = 0 | 1 // 0: token-based, 1: fixed-unit pricing

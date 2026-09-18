@@ -176,8 +176,8 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			newAPIError: newAPIError,
 		}
 	}
-	if endpointType == string(constant.EndpointTypeXaiVideo) {
-		return testXaiVideoChannel(c, channel, testModel)
+	if endpointType == string(constant.EndpointTypeXaiVideo) || endpointType == string(constant.EndpointTypeOpenAIVideo) {
+		return testVideoTaskChannel(c, channel, testModel)
 	}
 
 	// Determine relay format based on endpoint type or request path
@@ -445,6 +445,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	var httpResp *http.Response
 	if resp != nil {
 		httpResp = resp.(*http.Response)
+		if httpResp.StatusCode == http.StatusAccepted && info.ApiType == constant.APITypeHCAI {
+			httpResp.StatusCode = http.StatusOK
+		}
 		if httpResp.StatusCode != http.StatusOK {
 			err := service.RelayErrorHandler(c.Request.Context(), httpResp, true)
 			common.SysError(fmt.Sprintf(
@@ -524,11 +527,11 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 }
 
-func testXaiVideoChannel(c *gin.Context, channel *model.Channel, modelName string) testResult {
+func testVideoTaskChannel(c *gin.Context, channel *model.Channel, modelName string) testResult {
 	body, err := common.Marshal(map[string]any{
 		"model":        modelName,
 		"prompt":       "A sunrise above a calm sea",
-		"duration":     1,
+		"duration":     5,
 		"aspect_ratio": "16:9",
 		"resolution":   "720p",
 	})
@@ -574,7 +577,7 @@ func testXaiVideoChannel(c *gin.Context, channel *model.Channel, modelName strin
 		return testResult{context: c, localErr: err, newAPIError: types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)}
 	}
 	if resp == nil {
-		err = errors.New("xAI video endpoint returned an empty response")
+		err = errors.New("video endpoint returned an empty response")
 		return testResult{context: c, localErr: err, newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)}
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {

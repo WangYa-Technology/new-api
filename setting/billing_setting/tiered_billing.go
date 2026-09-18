@@ -13,18 +13,24 @@ const (
 	BillingModeTieredExpr = "tiered_expr"
 	BillingModeField      = "billing_mode"
 	BillingExprField      = "billing_expr"
+	PriceUnitField        = "price_unit"
+	PriceUnitRequest      = "request"
+	PriceUnitSecond       = "second"
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.
-// DB keys: billing_setting.billing_mode, billing_setting.billing_expr
+// DB keys: billing_setting.billing_mode, billing_setting.billing_expr,
+// billing_setting.price_unit
 type BillingSetting struct {
 	BillingMode map[string]string `json:"billing_mode"`
 	BillingExpr map[string]string `json:"billing_expr"`
+	PriceUnit   map[string]string `json:"price_unit"`
 }
 
 var billingSetting = BillingSetting{
 	BillingMode: make(map[string]string),
 	BillingExpr: make(map[string]string),
+	PriceUnit:   make(map[string]string),
 }
 
 func init() {
@@ -47,6 +53,13 @@ func GetBillingExpr(model string) (string, bool) {
 	return expr, ok
 }
 
+func GetPriceUnit(model string) string {
+	if billingSetting.PriceUnit[model] == PriceUnitSecond {
+		return PriceUnitSecond
+	}
+	return PriceUnitRequest
+}
+
 func GetBillingModeCopy() map[string]string {
 	return lo.Assign(billingSetting.BillingMode)
 }
@@ -55,13 +68,20 @@ func GetBillingExprCopy() map[string]string {
 	return lo.Assign(billingSetting.BillingExpr)
 }
 
+func GetPriceUnitCopy() map[string]string {
+	return lo.Assign(billingSetting.PriceUnit)
+}
+
 func GetPricingSyncData(base map[string]any) map[string]any {
-	extra := make(map[string]any, 2)
+	extra := make(map[string]any, 3)
 	if modes := GetBillingModeCopy(); len(modes) > 0 {
 		extra[BillingModeField] = modes
 	}
 	if exprs := GetBillingExprCopy(); len(exprs) > 0 {
 		extra[BillingExprField] = exprs
+	}
+	if units := GetPriceUnitCopy(); len(units) > 0 {
+		extra[PriceUnitField] = units
 	}
 	return lo.Assign(base, extra)
 }

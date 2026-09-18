@@ -176,6 +176,39 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'Models',
     },
   },
+  62: {
+    id: 62,
+    name: CHANNEL_TYPES[62],
+    icon: 'openai',
+    defaultBaseUrl: 'https://api.hctopup.com',
+    hints: {
+      baseUrl: 'https://api.hctopup.com',
+      key: 'API Key',
+      models: 'Models',
+    },
+  },
+  63: {
+    id: 63,
+    name: CHANNEL_TYPES[63],
+    icon: 'openai',
+    defaultBaseUrl: 'https://zcbservice.aizfw.cn/kyyReactApiServer',
+    hints: {
+      baseUrl: 'https://zcbservice.aizfw.cn/kyyReactApiServer',
+      key: 'API Key',
+      models: 'Models',
+    },
+  },
+  64: {
+    id: 64,
+    name: CHANNEL_TYPES[64],
+    icon: 'openai',
+    defaultBaseUrl: 'https://token.xinhankr.com',
+    hints: {
+      baseUrl: 'https://token.xinhankr.com',
+      key: 'API Key',
+      models: 'Models',
+    },
+  },
 }
 
 /**

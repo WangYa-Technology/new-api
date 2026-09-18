@@ -39,6 +39,13 @@ export function getAvailableGroups(
     .filter((g) => modelEnableGroups.includes(g))
 }
 
+export function isPerSecondModel(model: PricingModel): boolean {
+  return (
+    model.quota_type === QUOTA_TYPE_VALUES.REQUEST &&
+    model.billing_unit === 'second'
+  )
+}
+
 /**
  * Read a configured group ratio while preserving valid zero ratios.
  */
