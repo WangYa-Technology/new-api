@@ -57,6 +57,8 @@ export function getChannelTypeIcon(type: number): string {
     62: 'OpenAI', // HCAI
     63: 'OpenAI', // Keyiyun
     64: 'OpenAI', // Kemei AI
+    66: 'Vllm', // vLLM
+    67: 'SGLang', // SGLang
     3: 'Azure', // Azure
 
     // Anthropic
@@ -105,7 +107,7 @@ export function getChannelTypeIcon(type: number): string {
     52: 'Vidu', // Vidu
     36: 'Suno', // SunoAPI
     55: 'OpenAI', // Sora
-    54: 'Doubao', // DoubaoVideo
+    54: 'Doubao', // Doubao
     56: 'Replicate', // Replicate
     59: 'Volcengine', // Jiekou Seedance
 

@@ -1,8 +1,7 @@
 package service
 
 import (
-	"strings"
-
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 )
 
@@ -25,15 +24,15 @@ func effectiveBillingUsage(usage *dto.Usage) *dto.Usage {
 }
 
 func usageBillingPathForLog(isLocalCountTokens bool, usage *dto.Usage) string {
-	semantic := billingUsageSemantic(usage)
-	if semantic == "" {
+	effectiveUsage, ok := usageFromBillingUsage(usage)
+	if !ok {
 		if isLocalCountTokens {
 			return usageBillingPathLocal
 		}
 		return usageBillingPathUpstream
 	}
 
-	switch semantic {
+	switch effectiveUsage.UsageSemantic {
 	case dto.BillingUsageSemanticOpenAI:
 		if usage.BillingUsage.Estimated {
 			return usageBillingPathOpenAIEstimated
@@ -54,180 +53,16 @@ func usageBillingPathForLog(isLocalCountTokens bool, usage *dto.Usage) string {
 	return usageBillingPathUpstream
 }
 
-func appendUsageBillingPathForLog(other map[string]interface{}, isLocalCountTokens bool, usage *dto.Usage) {
+func appendUsageBillingPathForLog(other *model.LogOther, isLocalCountTokens bool, usage *dto.Usage) {
 	if other == nil {
 		return
 	}
-	appendAdminLogField(other, "usage_billing_path", usageBillingPathForLog(isLocalCountTokens, usage))
-}
-
-// billingUsageSemantic selects the authoritative payload for both settlement
-// and audit logs. Preserve OpenAI > Claude > Gemini precedence when metadata conflicts.
-func billingUsageSemantic(usage *dto.Usage) string {
-	if usage == nil || usage.BillingUsage == nil {
-		return ""
-	}
-	billingUsage := usage.BillingUsage
-	source := strings.TrimSpace(billingUsage.Source)
-	semantic := strings.TrimSpace(billingUsage.Semantic)
-
-	if billingUsage.OpenAIUsage != nil &&
-		(strings.EqualFold(source, dto.BillingUsageSourceOAIChat) ||
-			strings.EqualFold(source, dto.BillingUsageSourceOAIResponses) ||
-			strings.EqualFold(semantic, dto.BillingUsageSemanticOpenAI)) {
-		return dto.BillingUsageSemanticOpenAI
-	}
-
-	if billingUsage.ClaudeUsage != nil &&
-		(strings.EqualFold(source, dto.BillingUsageSourceClaudeMessages) ||
-			strings.EqualFold(semantic, dto.BillingUsageSemanticAnthropic)) {
-		return dto.BillingUsageSemanticAnthropic
-	}
-
-	if billingUsage.GeminiUsageMetadata != nil &&
-		(strings.EqualFold(source, dto.BillingUsageSourceGeminiChat) ||
-			strings.EqualFold(semantic, dto.BillingUsageSemanticGemini)) {
-		return dto.BillingUsageSemanticGemini
-	}
-
-	return ""
+	other.SetAdmin("usage_billing_path", usageBillingPathForLog(isLocalCountTokens, usage))
 }
 
 func usageFromBillingUsage(usage *dto.Usage) (*dto.Usage, bool) {
-	switch billingUsageSemantic(usage) {
-	case dto.BillingUsageSemanticOpenAI:
-		return usageFromOpenAIBillingUsage(usage.BillingUsage), true
-	case dto.BillingUsageSemanticAnthropic:
-		return usageFromClaudeBillingUsage(usage.BillingUsage), true
-	case dto.BillingUsageSemanticGemini:
-		return usageFromGeminiBillingUsage(usage.BillingUsage), true
+	if usage == nil || usage.BillingUsage == nil {
+		return nil, false
 	}
-	return nil, false
-}
-
-func usageFromOpenAIBillingUsage(billingUsage *dto.BillingUsage) *dto.Usage {
-	usage := *billingUsage.OpenAIUsage
-	if usage.PromptTokens == 0 && usage.InputTokens > 0 {
-		usage.PromptTokens = usage.InputTokens
-	}
-	if usage.CompletionTokens == 0 && usage.OutputTokens > 0 {
-		usage.CompletionTokens = usage.OutputTokens
-	}
-	if usage.InputTokens == 0 && usage.PromptTokens > 0 {
-		usage.InputTokens = usage.PromptTokens
-	}
-	if usage.OutputTokens == 0 && usage.CompletionTokens > 0 {
-		usage.OutputTokens = usage.CompletionTokens
-	}
-	if usage.TotalTokens == 0 {
-		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
-	}
-	if inputDetails := usage.InputTokensDetails; inputDetails != nil {
-		if usage.PromptTokensDetails.CachedTokens == 0 && inputDetails.CachedTokens > 0 {
-			usage.PromptTokensDetails.CachedTokens = inputDetails.CachedTokens
-		}
-		if usage.PromptTokensDetails.CachedCreationTokens == 0 && inputDetails.CachedCreationTokens > 0 {
-			usage.PromptTokensDetails.CachedCreationTokens = inputDetails.CachedCreationTokens
-		}
-		if usage.PromptTokensDetails.CacheWriteTokens == 0 && inputDetails.CacheWriteTokens > 0 {
-			usage.PromptTokensDetails.CacheWriteTokens = inputDetails.CacheWriteTokens
-		}
-		if usage.PromptTokensDetails.TextTokens == 0 && inputDetails.TextTokens > 0 {
-			usage.PromptTokensDetails.TextTokens = inputDetails.TextTokens
-		}
-		if usage.PromptTokensDetails.ImageTokens == 0 && inputDetails.ImageTokens > 0 {
-			usage.PromptTokensDetails.ImageTokens = inputDetails.ImageTokens
-		}
-		if usage.PromptTokensDetails.AudioTokens == 0 && inputDetails.AudioTokens > 0 {
-			usage.PromptTokensDetails.AudioTokens = inputDetails.AudioTokens
-		}
-	}
-	if usage.PromptTokensDetails.CachedTokens == 0 && usage.PromptCacheHitTokens > 0 {
-		usage.PromptTokensDetails.CachedTokens = usage.PromptCacheHitTokens
-	}
-	usage.UsageSemantic = dto.BillingUsageSemanticOpenAI
-	usage.UsageSource = billingUsage.Source
-	usage.BillingUsage = dto.CloneBillingUsage(billingUsage)
-	return &usage
-}
-
-func usageFromClaudeBillingUsage(billingUsage *dto.BillingUsage) *dto.Usage {
-	claudeUsage := billingUsage.ClaudeUsage
-	cacheCreation5m := claudeUsage.GetCacheCreation5mTokens()
-	if cacheCreation5m == 0 {
-		cacheCreation5m = claudeUsage.ClaudeCacheCreation5mTokens
-	}
-	cacheCreation1h := claudeUsage.GetCacheCreation1hTokens()
-	if cacheCreation1h == 0 {
-		cacheCreation1h = claudeUsage.ClaudeCacheCreation1hTokens
-	}
-
-	usage := &dto.Usage{
-		PromptTokens:                claudeUsage.InputTokens,
-		CompletionTokens:            claudeUsage.OutputTokens,
-		TotalTokens:                 claudeUsage.InputTokens + claudeUsage.OutputTokens,
-		InputTokens:                 claudeUsage.InputTokens + claudeUsage.CacheReadInputTokens + claudeUsage.CacheCreationInputTokens,
-		OutputTokens:                claudeUsage.OutputTokens,
-		UsageSemantic:               dto.BillingUsageSemanticAnthropic,
-		UsageSource:                 dto.BillingUsageSourceClaudeMessages,
-		BillingUsage:                dto.CloneBillingUsage(billingUsage),
-		ClaudeCacheCreation5mTokens: cacheCreation5m,
-		ClaudeCacheCreation1hTokens: cacheCreation1h,
-	}
-	usage.PromptTokensDetails.CachedTokens = claudeUsage.CacheReadInputTokens
-	usage.PromptTokensDetails.CachedCreationTokens = claudeUsage.CacheCreationInputTokens
-	return usage
-}
-
-func usageFromGeminiBillingUsage(billingUsage *dto.BillingUsage) *dto.Usage {
-	metadata := *billingUsage.GeminiUsageMetadata
-	promptTokens := metadata.PromptTokenCount + metadata.ToolUsePromptTokenCount
-	usage := &dto.Usage{
-		PromptTokens:     promptTokens,
-		CompletionTokens: metadata.CandidatesTokenCount + metadata.ThoughtsTokenCount,
-		TotalTokens:      metadata.TotalTokenCount,
-		UsageSemantic:    dto.BillingUsageSemanticGemini,
-		UsageSource:      dto.BillingUsageSourceGeminiChat,
-		BillingUsage:     dto.CloneBillingUsage(billingUsage),
-	}
-	usage.CompletionTokenDetails.ReasoningTokens = metadata.ThoughtsTokenCount
-	usage.PromptTokensDetails.CachedTokens = metadata.CachedContentTokenCount
-
-	for _, detail := range metadata.PromptTokensDetails {
-		addGeminiInputTokenDetail(&usage.PromptTokensDetails, detail)
-	}
-	for _, detail := range metadata.ToolUsePromptTokensDetails {
-		addGeminiInputTokenDetail(&usage.PromptTokensDetails, detail)
-	}
-	for _, detail := range metadata.CandidatesTokensDetails {
-		switch detail.Modality {
-		case "IMAGE":
-			usage.CompletionTokenDetails.ImageTokens += detail.TokenCount
-		case "AUDIO":
-			usage.CompletionTokenDetails.AudioTokens += detail.TokenCount
-		case "TEXT":
-			usage.CompletionTokenDetails.TextTokens += detail.TokenCount
-		}
-	}
-
-	if usage.TotalTokens == 0 {
-		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
-	} else if usage.CompletionTokens <= 0 {
-		usage.CompletionTokens = usage.TotalTokens - usage.PromptTokens
-	}
-	if usage.PromptTokens > 0 && usage.PromptTokensDetails.TextTokens == 0 && usage.PromptTokensDetails.AudioTokens == 0 {
-		usage.PromptTokensDetails.TextTokens = usage.PromptTokens
-	}
-	return usage
-}
-
-func addGeminiInputTokenDetail(details *dto.InputTokenDetails, detail dto.GeminiPromptTokensDetails) {
-	switch detail.Modality {
-	case "AUDIO":
-		details.AudioTokens += detail.TokenCount
-	case "IMAGE":
-		details.ImageTokens += detail.TokenCount
-	case "TEXT":
-		details.TextTokens += detail.TokenCount
-	}
+	return usage.BillingUsage.CanonicalUsage()
 }

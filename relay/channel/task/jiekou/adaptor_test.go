@@ -345,7 +345,7 @@ func TestTaskAdaptorFetchTask(t *testing.T) {
 	}))
 	defer server.Close()
 
-	response, err := (&TaskAdaptor{}).FetchTask(server.URL, "secret", map[string]any{"task_id": "upstream task"}, "")
+	response, err := (&TaskAdaptor{}).FetchTask(server.URL, "secret", &model.Task{TaskID: "upstream task"}, "")
 
 	require.NoError(t, err)
 	require.NotNil(t, response)
@@ -403,7 +403,7 @@ func TestTaskAdaptorParseTaskResult(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := (&TaskAdaptor{}).ParseTaskResult([]byte(test.body))
+			result, err := (&TaskAdaptor{}).ParseTaskResult(nil, nil, []byte(test.body))
 			if test.shouldFail {
 				require.Error(t, err)
 				return

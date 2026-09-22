@@ -58,7 +58,7 @@ func TestValidateRequestRejectsMetadataDurationOverflow(t *testing.T) {
 }
 
 func TestParseTaskResultCompleted(t *testing.T) {
-	result, err := (&TaskAdaptor{}).ParseTaskResult([]byte(`{
+	result, err := (&TaskAdaptor{}).ParseTaskResult(nil, nil, []byte(`{
 		"id":"upstream-id","status":"completed","data":[{"url":"https://example.com/video.mp4"}]
 	}`))
 	require.NoError(t, err)

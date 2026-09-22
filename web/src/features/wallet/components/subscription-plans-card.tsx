@@ -59,6 +59,8 @@ import type {
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
 import { formatQuota } from '@/lib/format'
+import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import type { PaymentMethod, TopupInfo } from '../types'
@@ -136,18 +138,19 @@ export function SubscriptionPlansCard({
 
   const fetchPlans = useCallback(async () => {
     try {
-      const res = await getPublicPlans()
+      const res = requireServerSuccess(await getPublicPlans())
       if (res.success) {
         setPlans(res.data || [])
       }
-    } catch {
+    } catch (error) {
+      handleServerError(error)
       setPlans([])
     }
   }, [])
 
   const fetchSelfSubscription = useCallback(async () => {
     try {
-      const res = await getSelfSubscriptionFull()
+      const res = requireServerSuccess(await getSelfSubscriptionFull())
       if (res.success && res.data) {
         setBillingPreference(
           res.data.billing_preference || 'subscription_first'
@@ -155,8 +158,8 @@ export function SubscriptionPlansCard({
         setActiveSubscriptions(res.data.subscriptions || [])
         setAllSubscriptions(res.data.all_subscriptions || [])
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      handleServerError(error)
     }
   }, [])
 
@@ -188,11 +191,11 @@ export function SubscriptionPlansCard({
         const normalized = res.data?.billing_preference || pref
         setBillingPreference(normalized)
       } else {
-        toast.error(res.message || t('Update failed'))
+        handleServerError(res, t('Update failed'))
         setBillingPreference(previous)
       }
-    } catch {
-      toast.error(t('Request failed'))
+    } catch (error) {
+      handleServerError(error, t('Request failed'))
       setBillingPreference(previous)
     }
   }
@@ -678,33 +681,35 @@ export function SubscriptionPlansCard({
         )}
       </TitledCard>
 
-      <SubscriptionPurchaseDialog
-        open={purchaseOpen}
-        onOpenChange={(open) => {
-          setPurchaseOpen(open)
-          if (!open) {
-            fetchSelfSubscription()
+      {purchaseOpen && selectedPlan ? (
+        <SubscriptionPurchaseDialog
+          open
+          onOpenChange={(open) => {
+            setPurchaseOpen(open)
+            if (!open) {
+              fetchSelfSubscription()
+            }
+          }}
+          plan={selectedPlan}
+          enableStripe={enableStripe}
+          enableCreem={enableCreem}
+          enableWaffoPancake={enableWaffoPancake}
+          enableOnlineTopUp={enableOnlineTopUp}
+          epayMethods={epayMethods}
+          userQuota={userQuota}
+          onPurchaseSuccess={onPurchaseSuccess}
+          purchaseLimit={
+            selectedPlan.plan?.max_purchase_per_user
+              ? Number(selectedPlan.plan.max_purchase_per_user)
+              : undefined
           }
-        }}
-        plan={selectedPlan}
-        enableStripe={enableStripe}
-        enableCreem={enableCreem}
-        enableWaffoPancake={enableWaffoPancake}
-        enableOnlineTopUp={enableOnlineTopUp}
-        epayMethods={epayMethods}
-        userQuota={userQuota}
-        onPurchaseSuccess={onPurchaseSuccess}
-        purchaseLimit={
-          selectedPlan?.plan?.max_purchase_per_user
-            ? Number(selectedPlan.plan.max_purchase_per_user)
-            : undefined
-        }
-        purchaseCount={
-          selectedPlan?.plan?.id
-            ? planPurchaseCountMap.get(selectedPlan.plan.id)
-            : undefined
-        }
-      />
+          purchaseCount={
+            selectedPlan.plan?.id
+              ? planPurchaseCountMap.get(selectedPlan.plan.id)
+              : undefined
+          }
+        />
+      ) : null}
     </>
   )
 }

@@ -70,7 +70,7 @@ func TestDoResponseUsesPublicRequestID(t *testing.T) {
 
 func TestParseTaskResultDone(t *testing.T) {
 	adaptor := &TaskAdaptor{}
-	result, err := adaptor.ParseTaskResult([]byte(`{
+	result, err := adaptor.ParseTaskResult(nil, nil, []byte(`{
 		"status":"done",
 		"progress":100,
 		"video":{"url":"https://example.com/video.mp4","duration":10}

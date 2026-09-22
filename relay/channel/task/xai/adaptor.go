@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -14,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel"
 	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relaydto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
@@ -175,30 +177,49 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, req
 	return channel.DoTaskApiRequest(a, c, info, requestBody)
 }
 
-func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (string, []byte, *dto.TaskError) {
+func (a *TaskAdaptor) ParseResponse(_ *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*channel.TaskSubmitResponse, *dto.TaskError) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", nil, service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
+		return nil, service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
 	}
 	_ = resp.Body.Close()
 
 	var upstream submitResponse
 	if err := common.Unmarshal(responseBody, &upstream); err != nil {
-		return "", nil, service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
+		return nil, service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
 	}
 	if strings.TrimSpace(upstream.RequestID) == "" {
-		return "", nil, service.TaskErrorWrapper(errors.New("request_id is empty"), "invalid_response", http.StatusInternalServerError)
+		return nil, service.TaskErrorWrapper(errors.New("request_id is empty"), "invalid_response", http.StatusInternalServerError)
 	}
 
-	c.JSON(http.StatusOK, submitResponse{RequestID: info.PublicTaskID})
-	return upstream.RequestID, responseBody, nil
+	video := relaydto.NewOpenAIVideo()
+	video.ID = info.PublicTaskID
+	video.TaskID = info.PublicTaskID
+	video.Model = info.OriginModelName
+	video.CreatedAt = time.Now().Unix()
+	return &channel.TaskSubmitResponse{UpstreamTaskID: upstream.RequestID, TaskData: responseBody, ClientResponse: video}, nil
 }
 
-func (a *TaskAdaptor) FetchTask(baseURL, key string, body map[string]any, proxy string) (*http.Response, error) {
-	taskID, ok := body["task_id"].(string)
-	if !ok || strings.TrimSpace(taskID) == "" {
+func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (string, []byte, *dto.TaskError) {
+	parsed, err := a.ParseResponse(c, resp, info)
+	if err != nil || parsed == nil {
+		return "", nil, err
+	}
+	var response map[string]any
+	if unmarshalErr := common.Unmarshal(parsed.TaskData, &response); unmarshalErr == nil {
+		if _, ok := response["request_id"]; ok {
+			response["request_id"] = info.PublicTaskID
+		}
+		c.JSON(http.StatusOK, response)
+	}
+	return parsed.UpstreamTaskID, parsed.TaskData, nil
+}
+
+func (a *TaskAdaptor) FetchTask(baseURL, key string, task *model.Task, proxy string) (*http.Response, error) {
+	if task == nil || strings.TrimSpace(task.GetUpstreamTaskID()) == "" {
 		return nil, errors.New("invalid task_id")
 	}
+	taskID := task.GetUpstreamTaskID()
 
 	request, err := http.NewRequest(http.MethodGet, strings.TrimRight(baseURL, "/")+"/v1/videos/"+taskID, nil)
 	if err != nil {
@@ -213,7 +234,7 @@ func (a *TaskAdaptor) FetchTask(baseURL, key string, body map[string]any, proxy 
 	return client.Do(request)
 }
 
-func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
+func (a *TaskAdaptor) ParseTaskResult(_ *model.Task, _ *http.Response, respBody []byte) (*relaycommon.TaskInfo, error) {
 	var response taskResponse
 	if err := common.Unmarshal(respBody, &response); err != nil {
 		return nil, errors.Wrap(err, "unmarshal task result failed")

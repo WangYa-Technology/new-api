@@ -76,7 +76,7 @@ func TestFetchTask(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resp, err := (&TaskAdaptor{}).FetchTask(server.URL+"/v1", "test-key", map[string]any{"task_id": "upstream-id"}, "")
+	resp, err := (&TaskAdaptor{}).FetchTask(server.URL+"/v1", "test-key", &model.Task{TaskID: "upstream-id"}, "")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -98,7 +98,7 @@ func TestParseTaskResult(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := (&TaskAdaptor{}).ParseTaskResult([]byte(test.body))
+			result, err := (&TaskAdaptor{}).ParseTaskResult(nil, nil, []byte(test.body))
 			require.NoError(t, err)
 			assert.Equal(t, string(test.status), result.Status)
 			assert.Equal(t, test.progress, result.Progress)

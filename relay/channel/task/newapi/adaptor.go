@@ -171,26 +171,26 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, req
 	return channel.DoTaskApiRequest(a, c, info, requestBody)
 }
 
-func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (string, []byte, *taskdto.TaskError) {
+func (a *TaskAdaptor) ParseResponse(_ *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*channel.TaskSubmitResponse, *taskdto.TaskError) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", nil, service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
+		return nil, service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
 	}
 	_ = resp.Body.Close()
 
 	var result videoResponse
 	if err := common.Unmarshal(responseBody, &result); err != nil {
-		return "", responseBody, service.TaskErrorWrapper(fmt.Errorf("unmarshal New API video response: %w", err), "unmarshal_response_body_failed", http.StatusBadGateway)
+		return nil, service.TaskErrorWrapper(fmt.Errorf("unmarshal New API video response: %w", err), "unmarshal_response_body_failed", http.StatusBadGateway)
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return "", responseBody, service.TaskErrorWrapper(fmt.Errorf("New API video error: %s", responseMessage(result, resp.StatusCode)), "newapi_video_error", resp.StatusCode)
+		return nil, service.TaskErrorWrapper(fmt.Errorf("New API video error: %s", responseMessage(result, resp.StatusCode)), "newapi_video_error", resp.StatusCode)
 	}
 	taskID := strings.TrimSpace(result.TaskID)
 	if taskID == "" {
 		taskID = strings.TrimSpace(result.ID)
 	}
 	if taskID == "" {
-		return "", responseBody, service.TaskErrorWrapper(fmt.Errorf("New API video task id is empty"), "invalid_response", http.StatusBadGateway)
+		return nil, service.TaskErrorWrapper(fmt.Errorf("New API video task id is empty"), "invalid_response", http.StatusBadGateway)
 	}
 
 	video := dto.NewOpenAIVideo()
@@ -198,15 +198,25 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	video.TaskID = info.PublicTaskID
 	video.Model = info.OriginModelName
 	video.CreatedAt = time.Now().Unix()
-	c.JSON(http.StatusOK, video)
-	return taskID, responseBody, nil
+	return &channel.TaskSubmitResponse{UpstreamTaskID: taskID, TaskData: responseBody, ClientResponse: video}, nil
 }
 
-func (a *TaskAdaptor) FetchTask(baseURL, key string, body map[string]any, proxy string) (*http.Response, error) {
-	taskID, ok := body["task_id"].(string)
-	if !ok || strings.TrimSpace(taskID) == "" {
+func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (string, []byte, *taskdto.TaskError) {
+	parsed, err := a.ParseResponse(c, resp, info)
+	if err != nil || parsed == nil {
+		return "", nil, err
+	}
+	if parsed.ClientResponse != nil {
+		c.JSON(http.StatusOK, parsed.ClientResponse)
+	}
+	return parsed.UpstreamTaskID, parsed.TaskData, nil
+}
+
+func (a *TaskAdaptor) FetchTask(baseURL, key string, task *model.Task, proxy string) (*http.Response, error) {
+	if task == nil || strings.TrimSpace(task.GetUpstreamTaskID()) == "" {
 		return nil, fmt.Errorf("invalid task_id")
 	}
+	taskID := task.GetUpstreamTaskID()
 	endpoint := normalizeBaseURL(baseURL) + "/v1/video/generations/" + url.PathEscape(taskID)
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -224,7 +234,7 @@ func (a *TaskAdaptor) FetchTask(baseURL, key string, body map[string]any, proxy 
 	return client.Do(req)
 }
 
-func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
+func (a *TaskAdaptor) ParseTaskResult(_ *model.Task, _ *http.Response, respBody []byte) (*relaycommon.TaskInfo, error) {
 	var result videoResponse
 	if err := common.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal New API video task result: %w", err)

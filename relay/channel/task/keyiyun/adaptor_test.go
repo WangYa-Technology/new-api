@@ -49,7 +49,7 @@ func TestBuildRequestBodyConvertsPublicVideoShape(t *testing.T) {
 }
 
 func TestParseTaskResultFailed(t *testing.T) {
-	result, err := (&TaskAdaptor{}).ParseTaskResult([]byte(`{
+	result, err := (&TaskAdaptor{}).ParseTaskResult(nil, nil, []byte(`{
 		"id":"upstream-id","status":"failed","error":{"message":"content rejected"}
 	}`))
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestParseTaskResultFailed(t *testing.T) {
 }
 
 func TestParseTaskResultAcceptsDecimalActualDuration(t *testing.T) {
-	result, err := (&TaskAdaptor{}).ParseTaskResult([]byte(`{
+	result, err := (&TaskAdaptor{}).ParseTaskResult(nil, nil, []byte(`{
 		"id":"upstream-id","status":"completed","actualDuration":4.000000,
 		"result_url":"https://example.com/video.mp4","amount":0.72
 	}`))
