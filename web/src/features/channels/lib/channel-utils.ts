@@ -54,9 +54,6 @@ export function getChannelTypeIcon(type: number): string {
     58: 'NewAPI', // Advanced Custom
     60: 'Sub2API', // Sub2API
     61: 'NewAPI', // New API
-    62: 'OpenAI', // HCAI
-    63: 'OpenAI', // Keyiyun
-    64: 'OpenAI', // Kemei AI
     66: 'Vllm', // vLLM
     67: 'SGLang', // SGLang
     3: 'Azure', // Azure
@@ -109,7 +106,6 @@ export function getChannelTypeIcon(type: number): string {
     55: 'OpenAI', // Sora
     54: 'Doubao', // Doubao
     56: 'Replicate', // Replicate
-    59: 'Volcengine', // Jiekou Seedance
 
     // Tools & Platforms
     37: 'Dify', // Dify

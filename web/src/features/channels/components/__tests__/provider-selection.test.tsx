@@ -70,6 +70,30 @@ const extensionPlugin: TaskPluginOption = {
   models: ['sora-2'],
 }
 
+test.each([59, 62, 63, 64])(
+  'retired provider %i is unavailable even through numeric search',
+  async (type) => {
+    const user = userEvent.setup()
+    render(
+      <ChannelProviderPicker
+        isCreating
+        plugins={[]}
+        canBindPlugin
+        loading={false}
+        failed={false}
+        disabled={false}
+        onRetry={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    )
+    expect(
+      screen.queryByRole('option', { name: new RegExp(`#${type}$`) })
+    ).not.toBeInTheDocument()
+    await user.type(screen.getByRole('combobox'), String(type))
+    expect(screen.queryByRole('option')).not.toBeInTheDocument()
+  }
+)
+
 test('creation hides legacy Zhipu from categories and numeric search while GLM remains selectable', async () => {
   const user = userEvent.setup()
   const select = vi.fn()
@@ -280,7 +304,7 @@ test('extension associations follow declared types and exclude legacy task-only 
   render(
     <ChannelProviderPicker
       plugins={[
-        { ...extensionPlugin, name: 'OpenAI', channelTypes: [24, 55, 61, 999] },
+        { ...extensionPlugin, name: 'OpenAI', channelTypes: [24, 55, 65, 999] },
       ]}
       canBindPlugin
       loading={false}
@@ -514,28 +538,28 @@ test.each([true, false])(
     for (const category of ['All', 'Built-in', 'Gateways']) {
       await user.click(screen.getByRole('tab', { name: category }))
       expect(
-        screen.getByRole('option', { name: 'New API Built-in #60' })
+        screen.getByRole('option', { name: 'New API Built-in #61' })
       ).toBeVisible()
       expect(
-        screen.getByRole('option', { name: 'Sub2API Built-in #59' })
+        screen.getByRole('option', { name: 'Sub2API Built-in #60' })
       ).toBeVisible()
     }
     expect(screen.getAllByRole('option')).toHaveLength(2)
     await user.click(
-      screen.getByRole('option', { name: 'New API Built-in #60' })
+      screen.getByRole('option', { name: 'New API Built-in #61' })
     )
-    expect(select).toHaveBeenLastCalledWith({ kind: 'builtin', type: 60 })
+    expect(select).toHaveBeenLastCalledWith({ kind: 'builtin', type: 61 })
     const search = screen.getByRole('combobox')
     await user.type(search, 'Sub2API')
     expect(screen.getAllByRole('option')).toHaveLength(1)
     await user.click(
-      screen.getByRole('option', { name: 'Sub2API Built-in #59' })
+      screen.getByRole('option', { name: 'Sub2API Built-in #60' })
     )
-    expect(select).toHaveBeenLastCalledWith({ kind: 'builtin', type: 59 })
+    expect(select).toHaveBeenLastCalledWith({ kind: 'builtin', type: 60 })
     await user.click(screen.getByRole('tab', { name: 'Built-in' }))
     expect(search).toHaveValue('Sub2API')
     expect(
-      screen.getByRole('option', { name: 'Sub2API Built-in #59' })
+      screen.getByRole('option', { name: 'Sub2API Built-in #60' })
     ).toBeVisible()
     await user.click(screen.getByRole('tab', { name: 'Gateways' }))
     await user.clear(search)

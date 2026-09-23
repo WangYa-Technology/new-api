@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { CHANNEL_TYPE_TASK_PLUGIN, CHANNEL_TYPE_NEW_API, CHANNEL_TYPE_SUB2API } from '../../constants'
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createRouter,
@@ -451,7 +453,7 @@ test('selecting a plugin opens a prefilled channel and creates its explicit bind
     mode: 'single',
     channel: {
       name: 'Video A',
-      type: 61,
+      type: CHANNEL_TYPE_TASK_PLUGIN,
       key: 'channel-secret',
       models: 'video-a-1',
       base_url: 'https://a.example',
@@ -665,7 +667,7 @@ test('creating a migrated provider uses its plugin binding instead of the legacy
     expect(post).toHaveBeenCalledWith(
       '/api/channel',
       expect.objectContaining({
-        channel: expect.objectContaining({ type: 61 }),
+        channel: expect.objectContaining({ type: CHANNEL_TYPE_TASK_PLUGIN }),
       }),
       expect.anything()
     )
@@ -1038,7 +1040,7 @@ test.each([
         mode,
         channel: expect.objectContaining({
           key: 'first-key\nsecond-key',
-          type: 61,
+          type: CHANNEL_TYPE_TASK_PLUGIN,
         }),
       }),
       expect.anything()
@@ -1368,7 +1370,7 @@ test('editing legacy channels retains the full provider list and saves the origi
 test('opening and reselecting an existing plugin preserves its saved configuration', async () => {
   editingChannel = {
     ...editingChannel,
-    type: 61,
+    type: CHANNEL_TYPE_TASK_PLUGIN,
     setting: '{"task_plugin_key":"video-a"}',
     priority: 7,
   }
@@ -1402,7 +1404,7 @@ test('opening and reselecting an existing plugin preserves its saved configurati
 test('an unavailable plugin keeps its identifier and binding when other fields are updated', async () => {
   editingChannel = {
     ...editingChannel,
-    type: 61,
+    type: CHANNEL_TYPE_TASK_PLUGIN,
     setting: '{"task_plugin_key":"removed-plugin"}',
   }
   const put = vi
@@ -1505,7 +1507,7 @@ test('request processing configuration does not mark the network category as con
   ).not.toHaveAccessibleName(/Configured/)
 })
 
-test.each([1, 57, 58, 59, 60])(
+test.each([1, 57, 58, CHANNEL_TYPE_SUB2API, CHANNEL_TYPE_NEW_API])(
   'provider %s marks a saved Responses WebSocket setting in Request & Response and clears the mark when disabled',
   async (type) => {
     editingChannel = {
@@ -1560,7 +1562,7 @@ test.each([
 test('configuration from fields unsupported by the selected provider stays unmarked', async () => {
   editingChannel = {
     ...editingChannel,
-    type: 61,
+    type: CHANNEL_TYPE_TASK_PLUGIN,
     setting:
       '{"task_plugin_key":"video-a","force_format":true,"responses_websocket_enabled":true}',
     settings:
@@ -2752,7 +2754,7 @@ test('the header override passthrough template button confirms before filling th
 test('a New API channel binds upstream task plugins and publishes their models', async () => {
   const channel = channelSchema.parse({
     ...editingChannel,
-    type: 60,
+    type: CHANNEL_TYPE_NEW_API,
     base_url: 'https://gateway.example',
     models: 'gpt-5',
     setting: JSON.stringify({ task_extend_plugin_keys: ['video-a'] }),

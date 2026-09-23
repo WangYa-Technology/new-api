@@ -39,6 +39,7 @@ const (
 	APITypeAdvancedCustom
 	APITypeSub2API
 	APITypeNewAPI
-	APITypeHCAI
+	// Reserved slot for the removed HCAI adaptor.
+	_
 	APITypeDummy // this one is only for count, do not add any channel after this
 )

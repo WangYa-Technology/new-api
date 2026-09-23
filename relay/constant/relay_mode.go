@@ -47,7 +47,6 @@ const (
 	RelayModeGemini
 
 	RelayModeResponsesCompact
-	RelayModeMusicGeneration
 	RelayModeAlphaSearch
 )
 
@@ -81,8 +80,6 @@ func Path2RelayMode(path string) int {
 		relayMode = RelayModeAudioTranscription
 	} else if strings.HasPrefix(path, "/v1/audio/translations") {
 		relayMode = RelayModeAudioTranslation
-	} else if strings.HasPrefix(path, "/v1/music_generation") {
-		relayMode = RelayModeMusicGeneration
 	} else if strings.HasPrefix(path, "/v1/rerank") {
 		relayMode = RelayModeRerank
 	} else if strings.HasPrefix(path, "/v1/realtime") {

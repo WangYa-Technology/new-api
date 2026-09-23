@@ -132,15 +132,15 @@ var ChannelBaseURLs = []string{
 	"https://api.replicate.com",                 //56
 	"https://chatgpt.com",                       //57
 	"",                                          //58
-	"https://api.highwayapi.ai",                 //59
+	"",                                          //59 retired channel; do not reuse
 	"",                                          //60
 	"",                                          //61
-	"https://api.hctopup.com",                   //62
-	"https://zcbservice.aizfw.cn/kyyReactApiServer", //63
-	"https://token.xinhankr.com",                    //64
-	"",                                              //65
-	"",                                              //66
-	"",                                              //67
+	"",                                          //62 retired channel; do not reuse
+	"",                                          //63 retired channel; do not reuse
+	"",                                          //64 retired channel; do not reuse
+	"",                                          //65
+	"",                                          //66
+	"",                                          //67
 }
 
 // GetChannelBaseURL returns the configured built-in base URL for a channel.

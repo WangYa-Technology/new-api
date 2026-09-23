@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
+	"github.com/QuantumNous/new-api/plugins"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -912,6 +913,36 @@ func TestSecurityRoutesDisableCachingBeforeAuthentication(t *testing.T) {
 			response := performPluginRequest(outer, http.MethodGet, path)
 			assert.Equal(t, http.StatusUnauthorized, response.Code)
 			assert.Contains(t, response.Header().Get("Cache-Control"), "no-store")
+		})
+	}
+}
+
+func TestVideoRouterPreservesBuiltinPluginRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	outer := gin.New()
+	SetTaskPluginProtocolRouter(outer)
+	SetVideoRouter(outer)
+	registry := jsplugin.NewRegistry()
+	for _, key := range []string{"kling", "jimeng"} {
+		source, err := plugins.Source(key)
+		require.NoError(t, err)
+		_, err = registry.RegisterFactory(source, jsplugin.Options{Key: key})
+		require.NoError(t, err)
+	}
+	builder := newPluginGenerationBuilder(outer.Routes(), nil, productionPluginRouteHandlers)
+	require.NoError(t, registry.SetGenerationPreparer(builder.prepare))
+	generation := registry.Generation()
+	for _, endpoint := range []struct{ method, path, plugin string }{
+		{"POST", "/kling/v1/videos/text2video", "kling"},
+		{"POST", "/kling/v1/videos/image2video", "kling"},
+		{"GET", "/kling/v1/videos/text2video/:task_id", "kling"},
+		{"GET", "/kling/v1/videos/image2video/:task_id", "kling"},
+		{"POST", "/jimeng/", "jimeng"},
+	} {
+		t.Run(endpoint.method+" "+endpoint.path, func(t *testing.T) {
+			binding, ok := generation.LookupDeclaredRoute(endpoint.method, endpoint.path)
+			require.True(t, ok, "native URL must remain available after production route registration")
+			assert.Equal(t, endpoint.plugin, binding.Plugin.Meta.Key)
 		})
 	}
 }

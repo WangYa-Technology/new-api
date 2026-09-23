@@ -82,7 +82,6 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		constant.ChannelTypeJimeng,
 		constant.ChannelTypeDoubaoVideo,
 		constant.ChannelTypeVidu,
-		constant.ChannelTypeJiekouSeedance,
 	}
 	if lo.Contains(unsupportedTestChannelTypes, channel.Type) {
 		channelTypeName := constant.GetChannelTypeName(channel.Type)
@@ -176,7 +175,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			newAPIError: newAPIError,
 		}
 	}
-	if endpointType == string(constant.EndpointTypeXaiVideo) || endpointType == string(constant.EndpointTypeOpenAIVideo) {
+	if endpointType == string(constant.EndpointTypeOpenAIVideo) {
 		return testVideoTaskChannel(c, channel, testModel)
 	}
 
@@ -201,8 +200,6 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			relayFormat = types.RelayFormatOpenAIImage
 		case constant.EndpointTypeEmbeddings:
 			relayFormat = types.RelayFormatEmbedding
-		case constant.EndpointTypeMusic:
-			relayFormat = types.RelayFormatMiniMaxMusic
 		default:
 			relayFormat = types.RelayFormatOpenAI
 		}
@@ -229,9 +226,6 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 		if strings.HasPrefix(c.Request.URL.Path, "/v1/responses/compact") {
 			relayFormat = types.RelayFormatOpenAIResponsesCompaction
-		}
-		if c.Request.URL.Path == "/v1/music_generation" {
-			relayFormat = types.RelayFormatMiniMaxMusic
 		}
 	}
 
@@ -452,9 +446,6 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	var httpResp *http.Response
 	if resp != nil {
 		httpResp = resp.(*http.Response)
-		if httpResp.StatusCode == http.StatusAccepted && info.ApiType == constant.APITypeHCAI {
-			httpResp.StatusCode = http.StatusOK
-		}
 		if httpResp.StatusCode != http.StatusOK {
 			err := service.RelayErrorHandler(c.Request.Context(), httpResp, true)
 			common.SysError(fmt.Sprintf(
@@ -803,13 +794,6 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				Query:     "What is Deep Learning?",
 				Documents: []any{"Deep Learning is a subset of machine learning.", "Machine learning is a field of artificial intelligence."},
 				TopN:      lo.ToPtr(2),
-			}
-		case constant.EndpointTypeMusic:
-			return &dto.MiniMaxMusicRequest{
-				Model:          model,
-				Prompt:         "calm ambient instrumental, short intro",
-				IsInstrumental: lo.ToPtr(true),
-				OutputFormat:   "url",
 			}
 		case constant.EndpointTypeOpenAIResponse:
 			// 返回 OpenAIResponsesRequest

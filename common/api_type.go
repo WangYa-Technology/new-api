@@ -5,6 +5,10 @@ import "github.com/QuantumNous/new-api/constant"
 func ChannelType2APIType(channelType int) (int, bool) {
 	apiType := -1
 	switch channelType {
+	case constant.ChannelTypeJiekouSeedance, constant.ChannelTypeHCAI,
+		constant.ChannelTypeKeyiyun, constant.ChannelTypeKemei:
+		// Retired channels must not silently use the OpenAI fallback.
+		return -1, false
 	case constant.ChannelTypeOpenAI:
 		apiType = constant.APITypeOpenAI
 	case constant.ChannelTypeAnthropic:
@@ -81,16 +85,6 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		apiType = constant.APITypeSub2API
 	case constant.ChannelTypeNewAPI:
 		apiType = constant.APITypeNewAPI
-	case constant.ChannelTypeHCAI:
-		apiType = constant.APITypeHCAI
-	case constant.ChannelTypeKeyiyun:
-		apiType = constant.APITypeOpenAI
-	case constant.ChannelTypeKemei:
-		apiType = constant.APITypeNewAPI
-	case constant.ChannelTypeJiekouSeedance:
-		// Seedance uses the task relay path. OpenAI is retained as the
-		// synchronous fallback so shared channel metadata can be initialized.
-		apiType = constant.APITypeOpenAI
 	}
 	if apiType == -1 {
 		// Task plugin channels are served by the task relay and must never

@@ -21,7 +21,6 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/deepseek"
 	"github.com/QuantumNous/new-api/relay/channel/dify"
 	"github.com/QuantumNous/new-api/relay/channel/gemini"
-	"github.com/QuantumNous/new-api/relay/channel/hcai"
 	"github.com/QuantumNous/new-api/relay/channel/jimeng"
 	"github.com/QuantumNous/new-api/relay/channel/jina"
 	"github.com/QuantumNous/new-api/relay/channel/minimax"
@@ -37,12 +36,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/siliconflow"
 	"github.com/QuantumNous/new-api/relay/channel/sub2api"
 	"github.com/QuantumNous/new-api/relay/channel/submodel"
-	taskjiekou "github.com/QuantumNous/new-api/relay/channel/task/jiekou"
 	jspluginadaptor "github.com/QuantumNous/new-api/relay/channel/task/jsplugin"
-	taskkeyiyun "github.com/QuantumNous/new-api/relay/channel/task/keyiyun"
-	tasknewapi "github.com/QuantumNous/new-api/relay/channel/task/newapi"
-	tasksiliconflow "github.com/QuantumNous/new-api/relay/channel/task/siliconflow"
-	taskxai "github.com/QuantumNous/new-api/relay/channel/task/xai"
 	"github.com/QuantumNous/new-api/relay/channel/tencent"
 	"github.com/QuantumNous/new-api/relay/channel/vertex"
 	"github.com/QuantumNous/new-api/relay/channel/volcengine"
@@ -129,8 +123,6 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &sub2api.Adaptor{}
 	case constant.APITypeNewAPI:
 		return &newapi.Adaptor{}
-	case constant.APITypeHCAI:
-		return &hcai.Adaptor{}
 	}
 	return nil
 }
@@ -194,9 +186,6 @@ func TaskPlatformUnavailableError(platform constant.TaskPlatform) (string, strin
 }
 
 func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
-	if adaptor := nativeTaskAdaptor(platform); adaptor != nil {
-		return adaptor
-	}
 	plugin, ok := ResolveTaskPluginForPlatform(pluginruntime.DefaultRegistry.Generation(), platform)
 	if !ok {
 		return nil
@@ -231,9 +220,6 @@ func getTaskAdaptorForRequest(c *gin.Context, platform constant.TaskPlatform) (c
 			return platform, nil
 		}
 	}
-	if adaptor := nativeTaskAdaptor(platform); adaptor != nil {
-		return platform, adaptor
-	}
 	generation := pluginruntime.DefaultRegistry.Generation()
 	plugin, ok := ResolveTaskPluginForPlatform(generation, platform)
 	if !ok {
@@ -246,24 +232,4 @@ func getTaskAdaptorForRequest(c *gin.Context, platform constant.TaskPlatform) (c
 		})
 	}
 	return platform, jspluginadaptor.New(plugin)
-}
-
-// nativeTaskAdaptor keeps the HCAI fork's first-party task providers on the
-// host-owned task lifecycle. Upstream task providers use the JS plugin registry;
-// these providers carry local API contracts and remain compiled Go adaptors.
-func nativeTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
-	switch platform {
-	case constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeJiekouSeedance)):
-		return &taskjiekou.TaskAdaptor{}
-	case constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeKeyiyun)):
-		return &taskkeyiyun.TaskAdaptor{}
-	case constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeKemei)):
-		return &tasknewapi.TaskAdaptor{}
-	case constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeSiliconFlow)):
-		return &tasksiliconflow.TaskAdaptor{}
-	case constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeXai)):
-		return &taskxai.TaskAdaptor{}
-	default:
-		return nil
-	}
 }
