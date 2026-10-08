@@ -164,6 +164,7 @@ it('shows desktop remaining and used amounts side by side without labels, with t
   expect(
     trigger.querySelector('[data-slot="api-key-quota-values"]')
   ).toHaveClass('grid-cols-2')
+  expect(trigger).toHaveClass('border-0', 'px-0')
   expect(within(trigger).getByText('80')).toHaveClass('text-left')
   expect(within(trigger).getByText('120')).toHaveClass('text-right')
   expect(trigger.parentElement).toHaveClass('max-w-45')
@@ -202,6 +203,7 @@ it('shows unlimited with cumulative usage and explains it on demand', async () =
   expect(button).toHaveTextContent('Unlimited')
   expect(button).toHaveTextContent('Unlimited120')
   expect(button).not.toHaveTextContent(/Remaining|Used amount/)
+  expect(button).toHaveClass('border-0', 'px-0')
   expect(within(button).getByText('Unlimited')).toHaveClass('text-left')
   expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
   await userEvent.click(button)
@@ -349,43 +351,69 @@ async function renderKeysPage(status = 1, overrides: Partial<ApiKey> = {}) {
   return { post, put }
 }
 
-it('combines creation and last use while keeping expiry, models and IP restrictions separate', async () => {
-  await renderKeysPage()
-  for (const name of ['Name', 'API Key', 'Group', 'Models', 'IP Restriction']) {
+it('keeps common columns visible and reveals secondary information in the row details submenu', async () => {
+  const user = userEvent.setup()
+  const { post } = await renderKeysPage(1, {
+    model_limits_enabled: true,
+    model_limits: 'gpt-4o,gpt-4.1',
+    allow_ips: '192.0.2.1\n198.51.100.0/24',
+  })
+  for (const name of [
+    'Name',
+    'Status',
+    'API Key',
+    'Quota ($)',
+    'Group',
+    'Actions',
+  ]) {
     expect(screen.getByRole('columnheader', { name })).toBeInTheDocument()
   }
-  expect(screen.getByRole('columnheader', { name: 'Time' })).toBeInTheDocument()
-  expect(
-    screen.getByRole('columnheader', { name: 'Expires' })
-  ).toBeInTheDocument()
-  const timeCell = screen.getByRole('cell', { name: /Created.*Last Used/ })
-  expect(within(timeCell).getByText('Last Used')).toBeInTheDocument()
-  const quotaHeader = screen.getByRole('columnheader', { name: 'Quota ($)' })
-  const quotaTrigger = screen.getByRole('button', {
-    name: /Remaining 80; Remaining percentage 40%; Used amount 120/,
-  })
-  expect(quotaHeader).not.toHaveClass('pr-8')
-  expect(quotaTrigger.closest('td')).not.toHaveClass('pr-8')
+  for (const name of ['Models', 'IP Restriction', 'Time', 'Expires']) {
+    expect(screen.queryByRole('columnheader', { name })).not.toBeInTheDocument()
+  }
+  await user.click(screen.getByRole('button', { name: 'Open menu' }))
+  const details = screen.getByRole('menuitem', { name: 'Details' })
+  details.focus()
+  await user.keyboard('{ArrowRight}')
+  expect(await screen.findByText('gpt-4o')).toBeVisible()
+  expect(screen.getByText('gpt-4.1')).toBeVisible()
+  expect(screen.getByText('192.0.2.1')).toBeVisible()
+  expect(screen.getByText('198.51.100.0/24')).toBeVisible()
+  expect(screen.getByText('Created')).toBeVisible()
+  expect(screen.getByText('Last Used')).toBeVisible()
+  expect(screen.getByText('Never')).toBeVisible()
+  expect(post).not.toHaveBeenCalled()
 })
 
-it('restores dates hidden by the old default and preserves unrelated column preferences', async () => {
-  localStorage.setItem(
+it('shows unrestricted defaults in details and lets users restore an optional column', async () => {
+  const user = userEvent.setup()
+  await renderKeysPage()
+  await user.click(screen.getByRole('button', { name: 'Open menu' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Details' }))
+  const details = await screen.findByRole('region', { name: 'Details' })
+  expect(within(details).getByText('Unlimited')).toBeVisible()
+  expect(within(details).getByText('No restriction')).toBeVisible()
+  expect(within(details).getByText('Never')).toBeVisible()
+  await user.keyboard('{Escape}{Escape}')
+  await user.click(screen.getByRole('button', { name: 'View' }))
+  await user.click(screen.getByRole('menuitemcheckbox', { name: 'Expires' }))
+  expect(screen.getByRole('columnheader', { name: 'Expires' })).toBeVisible()
+})
+
+it('preserves explicit visible-column preferences while hiding other secondary columns', async () => {
+  window.localStorage.setItem(
     'api-keys:column-visibility',
     JSON.stringify({
-      created_time: false,
-      accessed_time: false,
+      activity_time: true,
       expired_time: false,
       model_limits: false,
     })
   )
   await renderKeysPage()
   expect(screen.getByRole('columnheader', { name: 'Time' })).toBeInTheDocument()
-  expect(
-    screen.getByRole('columnheader', { name: 'Expires' })
-  ).toBeInTheDocument()
-  expect(
-    screen.queryByRole('columnheader', { name: 'Models' })
-  ).not.toBeInTheDocument()
+  for (const name of ['Expires', 'Models', 'IP Restriction']) {
+    expect(screen.queryByRole('columnheader', { name })).not.toBeInTheDocument()
+  }
 })
 
 it.each([

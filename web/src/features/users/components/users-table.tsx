@@ -31,6 +31,7 @@ import {
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { createServerError } from '@/lib/server-error-message'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getUsers, searchUsers } from '../api'
 import {
@@ -39,6 +40,7 @@ import {
   getUserRoleOptions,
   isUserDeleted,
 } from '../constants'
+import { canDisableUser } from '../lib/user-actions'
 import type { User, UserSortBy } from '../types'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { useUsersColumns } from './users-columns'
@@ -48,7 +50,6 @@ const route = getRouteApi('/_authenticated/users/')
 
 const USER_SORTABLE_COLUMNS = new Set<UserSortBy>([
   'id',
-  'username',
   'quota',
   'group',
   'created_at',
@@ -62,6 +63,7 @@ function isDisabledUserRow(user: User) {
 export function UsersTable() {
   const { t } = useTranslation()
   const columns = useUsersColumns()
+  const operator = useAuthStore((state) => state.auth.user)
   const { refreshTrigger } = useUsers()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [sorting, setSorting] = useState<SortingState>([])
@@ -173,7 +175,9 @@ export function UsersTable() {
   const { table } = useDataTable({
     data: users,
     columns,
-    enableRowSelection: true,
+    getRowId: (user) => String(user.id),
+    enableRowSelection: (row) =>
+      canDisableUser(row.original, operator?.id, operator?.role ?? 0),
     columnFilters,
     globalFilter,
     pagination,
@@ -181,7 +185,7 @@ export function UsersTable() {
     globalFilterFn: (row, _columnId, filterValue) => {
       const searchValue = String(filterValue).toLowerCase()
       const fields = [
-        row.getValue('username'),
+        row.original.username,
         row.original.display_name,
         row.original.email,
       ]

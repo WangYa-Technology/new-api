@@ -25,6 +25,7 @@ import {
 } from './section-registry.tsx'
 
 const defaultSiteSettings: SiteSettings = {
+  'console_setting.default_language': 'auto',
   Notice: '',
   SystemName: 'New API',
   Logo: '',

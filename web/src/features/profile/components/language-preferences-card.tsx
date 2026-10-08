@@ -27,6 +27,7 @@ import {
   INTERFACE_LANGUAGE_OPTIONS,
   normalizeInterfaceLanguage,
 } from '@/i18n/languages'
+import { rememberLanguagePreference } from '@/i18n/site-language'
 import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
 import { useAuthStore } from '@/stores/auth-store'
@@ -72,6 +73,7 @@ export function LanguagePreferencesCard(props: LanguagePreferencesCardProps) {
         throw createServerError(response, t('Failed to update settings'))
       }
 
+      rememberLanguagePreference(nextLanguage)
       if (auth.user) {
         const existingSetting =
           typeof auth.user.setting === 'string'

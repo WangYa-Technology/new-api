@@ -137,7 +137,7 @@ export function ApiKeyCell({ apiKey }: { apiKey: ApiKey }) {
 
 type ApiKeyRestrictionProps = {
   apiKey: ApiKey
-  detailsTrigger?: 'hover' | 'click'
+  detailsTrigger?: 'hover' | 'click' | 'inline'
 }
 
 export function ModelLimitsCell(props: ApiKeyRestrictionProps) {
@@ -180,8 +180,25 @@ function ApiKeyRestrictionCell(props: {
   label: string
   title: string
   emptyLabel: string
-  detailsTrigger?: 'hover' | 'click'
+  detailsTrigger?: 'hover' | 'click' | 'inline'
 }) {
+  if (props.detailsTrigger === 'inline') {
+    return (
+      <div className='min-w-0 space-y-1 text-xs'>
+        <div className='text-muted-foreground font-medium'>{props.title}</div>
+        {props.items.length ? (
+          props.items.map((item) => (
+            <div key={item} className='font-mono break-all'>
+              {item}
+            </div>
+          ))
+        ) : (
+          <div>{props.emptyLabel}</div>
+        )}
+      </div>
+    )
+  }
+
   if (!props.items.length) {
     if (props.detailsTrigger === 'click') {
       return (

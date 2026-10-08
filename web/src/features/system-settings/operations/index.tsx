@@ -68,10 +68,7 @@ export function OperationsSettings() {
       defaultSection={OPERATIONS_DEFAULT_SECTION}
       getSectionContent={getOperationsSectionContent}
       getSectionMeta={getOperationsSectionMeta}
-      extraArgs={[
-        status?.version as string | undefined,
-        status?.start_time as number | null | undefined,
-      ]}
+      extraArgs={[status?.version as string | undefined]}
       loadingMessage='Loading maintenance settings...'
     />
   )

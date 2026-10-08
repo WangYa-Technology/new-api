@@ -32,6 +32,7 @@ import {
   Radio,
   ServerCog,
   Settings,
+  Shield,
   Ticket,
   User,
   Users,
@@ -120,6 +121,11 @@ export function useSidebarData(): SidebarData {
             title: t('Profile'),
             url: '/profile',
             icon: User,
+          },
+          {
+            title: t('Security & Access'),
+            url: '/security',
+            icon: Shield,
           },
           {
             title: t('Support'),

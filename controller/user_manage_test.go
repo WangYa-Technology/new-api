@@ -120,6 +120,43 @@ func TestManageUserDisableAdvancesAuthVersionOnceAndRevokesSession(t *testing.T)
 	assert.Equal(t, model.UserSessionStatusRevoked, session.Status)
 }
 
+func TestManageUserDisableRejectsProtectedTargets(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		operatorRole int
+		targetRole   int
+	}{
+		{"admin cannot disable peer", common.RoleAdminUser, common.RoleAdminUser},
+		{"admin cannot disable root", common.RoleAdminUser, common.RoleRootUser},
+		{"root cannot disable root", common.RoleRootUser, common.RoleRootUser},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupManageUserTestDB(t)
+			user := model.User{
+				Username: "protected-user", Password: "password", Role: tc.targetRole,
+				Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1,
+			}
+			require.NoError(t, db.Create(&user).Error)
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/api/user/manage",
+				strings.NewReader(fmt.Sprintf(`{"id":%d,"action":"disable"}`, user.Id)))
+			c.Request.Header.Set("Content-Type", "application/json")
+			c.Set("id", 9999)
+			c.Set("role", tc.operatorRole)
+
+			ManageUser(c)
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), `"success":false`)
+			var updated model.User
+			require.NoError(t, db.First(&updated, user.Id).Error)
+			assert.Equal(t, common.UserStatusEnabled, updated.Status)
+			assert.EqualValues(t, 1, updated.AuthVersion)
+		})
+	}
+}
+
 func TestManageUserDemoteAdvancesAuthVersionAndRevokesSessionsOnce(t *testing.T) {
 	db := setupManageUserTestDB(t)
 	previousMaster := common.IsMasterNode

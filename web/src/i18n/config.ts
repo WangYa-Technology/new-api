@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import i18n from 'i18next'
-import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
 import { convertDetectedLanguage } from './languages'
@@ -28,6 +27,7 @@ import ru from './locales/ru.json'
 import vi from './locales/vi.json'
 import zhTW from './locales/zh-TW.json'
 import zhCN from './locales/zh.json'
+import { createSiteLanguageDetector } from './site-language'
 
 export const resources = {
   en,
@@ -40,7 +40,7 @@ export const resources = {
 } as const
 
 i18n
-  .use(LanguageDetector)
+  .use(createSiteLanguageDetector())
   .use(initReactI18next)
   .init({
     resources,
@@ -53,10 +53,11 @@ i18n
       escapeValue: false, // not needed for react as it escapes by default
     },
     detection: {
-      // Default to English until the user explicitly chooses a language.
-      order: ['localStorage'],
-      caches: ['localStorage'],
-      // Normalize legacy cached locale codes such as `zh-CN` and `zh-TW`.
+      // User choice, then the configured site default or browser language.
+      order: ['localStorage', 'siteDefault'],
+      // Only explicit choices are saved; automatic defaults must remain reactive.
+      caches: [],
+      // Normalize cached and browser locale codes such as `zh-CN` and `zh-TW`.
       convertDetectedLanguage,
     },
   })

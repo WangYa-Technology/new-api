@@ -304,7 +304,7 @@ export function StatCard(props: StatCardProps) {
         props.compactMobile ? 'gap-1' : 'gap-1.5'
       )}
     >
-      <div className='flex items-start justify-between gap-1'>
+      <div className='flex flex-wrap items-start justify-between gap-1'>
         <div className='text-muted-foreground flex items-center gap-1 text-[11px] font-medium sm:gap-2 sm:text-xs'>
           <IconBadge
             tone={iconTone}

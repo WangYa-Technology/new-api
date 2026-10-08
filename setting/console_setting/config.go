@@ -1,8 +1,12 @@
 package console_setting
 
-import "github.com/QuantumNous/new-api/setting/config"
+import (
+	"fmt"
+	"github.com/QuantumNous/new-api/setting/config"
+)
 
 type ConsoleSetting struct {
+	DefaultLanguage      string `json:"default_language"`
 	ApiInfo              string `json:"api_info"`              // 控制台 API 信息 (JSON 数组字符串)
 	UptimeKumaGroups     string `json:"uptime_kuma_groups"`    // Uptime Kuma 分组配置 (JSON 数组字符串)
 	Announcements        string `json:"announcements"`         // 系统公告 (JSON 数组字符串)
@@ -18,6 +22,7 @@ type ConsoleSetting struct {
 
 // 默认配置
 var defaultConsoleSetting = ConsoleSetting{
+	DefaultLanguage:      "auto",
 	ApiInfo:              "",
 	UptimeKumaGroups:     "",
 	Announcements:        "",
@@ -42,4 +47,14 @@ func init() {
 // GetConsoleSetting 获取 ConsoleSetting 配置实例
 func GetConsoleSetting() *ConsoleSetting {
 	return &consoleSetting
+}
+
+// ValidateDefaultLanguage accepts the interface languages and browser detection mode.
+func ValidateDefaultLanguage(value string) error {
+	switch value {
+	case "auto", "en", "zhCN", "zhTW", "fr", "ru", "ja", "vi":
+		return nil
+	default:
+		return fmt.Errorf("unsupported site default language: %s", value)
+	}
 }

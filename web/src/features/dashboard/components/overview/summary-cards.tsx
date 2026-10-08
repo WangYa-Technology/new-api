@@ -16,14 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { skipToken, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, Flame, ShieldCheck, TrendingDown } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StaggerContainer, StaggerItem } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import type { QuotaDataItem } from '@/features/dashboard/types'
@@ -31,7 +32,7 @@ import { useStatus } from '@/hooks/use-status'
 import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
 import { formatNumber, formatQuota } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
-import { computeTimeRange } from '@/lib/time'
+import { computeTimeRange, getStartOfDay } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -142,6 +143,13 @@ export function SummaryCards() {
   const user = useAuthStore((state) => state.auth.user)
   const { status, loading } = useStatus()
 
+  const [usagePeriod, setUsagePeriod] = useState<'24h' | 'today'>('24h')
+  const todayTimeRange = useMemo(() => {
+    if (usagePeriod !== 'today') return null
+    const now = new Date(Date.now())
+    return computeTimeRange(0, getStartOfDay(now), now)
+  }, [usagePeriod])
+
   const summaryTimeRange = useMemo(() => computeTimeRange(1), [])
   const remainQuota = Number(user?.quota ?? 0)
   const usedQuota = Number(user?.used_quota ?? 0)
@@ -152,6 +160,7 @@ export function SummaryCards() {
       'dashboard',
       'overview',
       'summary-sparklines',
+      user?.id,
       summaryTimeRange.start_timestamp,
       summaryTimeRange.end_timestamp,
     ],
@@ -165,6 +174,43 @@ export function SummaryCards() {
       ),
     staleTime: 60 * 1000,
   })
+
+  const todayUsageQuery = useQuery({
+    queryKey: [
+      'dashboard',
+      'overview',
+      'today-usage',
+      user?.id,
+      todayTimeRange,
+    ],
+    queryFn: todayTimeRange
+      ? async () =>
+          requireServerSuccess(
+            await getUserQuotaDates({
+              ...todayTimeRange,
+              default_time: 'hour',
+            })
+          )
+      : skipToken,
+    staleTime: 60 * 1000,
+  })
+  const selectedUsageQuery =
+    usagePeriod === 'today' ? todayUsageQuery : usageTrendQuery
+  const selectedTimeRange = todayTimeRange ?? summaryTimeRange
+  const selectedUsage = (selectedUsageQuery.data?.data ?? []).reduce(
+    (total, item) => total + (Number(item.quota) || 0),
+    0
+  )
+  const selectedSparkline = useMemo(
+    () =>
+      buildSummarySparklines(
+        selectedUsageQuery.data?.data ?? [],
+        remainQuota,
+        selectedTimeRange.start_timestamp,
+        selectedTimeRange.end_timestamp
+      ).usage,
+    [selectedUsageQuery.data?.data, remainQuota, selectedTimeRange]
+  )
 
   const summaryValues = useMemo(() => {
     return {
@@ -213,7 +259,7 @@ export function SummaryCards() {
   const healthCfg = HEALTH_CONFIG[healthLevel]
   const runwayDays = getRunwayDays(remainQuota, recentUsage)
 
-  const todayUsageDisplay = formatQuota(recentUsage)
+  const todayUsageDisplay = formatQuota(selectedUsage)
   let runwayDisplay: string
   if (runwayDays !== null) {
     if (runwayDays < 1) {
@@ -232,6 +278,7 @@ export function SummaryCards() {
   const items = useSummaryCardsConfig({
     ...summaryValues,
     todayUsageDisplay,
+    usagePeriod,
     currencyEnabled,
     currencyLabel,
   }).map((config, index) => {
@@ -246,7 +293,7 @@ export function SummaryCards() {
       tone: tones[index] ?? 'accent-3',
       sparkline:
         config.key === 'todayUsage'
-          ? sparklineData.usage
+          ? selectedSparkline
           : getSummarySparkline(config.key, sparklineData),
       sparklineVariant: 'line' as const,
     }
@@ -280,7 +327,40 @@ export function SummaryCards() {
                   tone={it.tone}
                   sparkline={it.sparkline}
                   sparklineVariant={it.sparklineVariant}
-                  loading={loading}
+                  loading={
+                    loading ||
+                    (it.key === 'todayUsage' && selectedUsageQuery.isPending)
+                  }
+                  error={it.key === 'todayUsage' && selectedUsageQuery.isError}
+                  action={
+                    it.key === 'todayUsage' ? (
+                      <ToggleGroup
+                        value={[usagePeriod]}
+                        onValueChange={(values) => {
+                          const value = values[0]
+                          if (value === '24h' || value === 'today') {
+                            setUsagePeriod(value)
+                          }
+                        }}
+                        variant='outline'
+                        size='sm'
+                        aria-label={t('Usage period')}
+                      >
+                        <ToggleGroupItem
+                          value='24h'
+                          className='h-6 text-[11px]'
+                        >
+                          {t('24H')}
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                          value='today'
+                          className='h-6 text-[11px]'
+                        >
+                          {t('Today')}
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                    ) : undefined
+                  }
                   compactMobile
                 />
               </StaggerItem>

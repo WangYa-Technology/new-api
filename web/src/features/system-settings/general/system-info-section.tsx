@@ -21,6 +21,7 @@ import type { Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -32,6 +33,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { INTERFACE_LANGUAGE_OPTIONS } from '@/i18n/languages'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
@@ -47,6 +49,18 @@ import { useUpdateOption } from '../hooks/use-update-option'
 import { isValidTaskPublicAddress } from './task-public-address'
 
 const _systemInfoSchema = z.object({
+  console_setting: z.object({
+    default_language: z.enum([
+      'auto',
+      'en',
+      'zhCN',
+      'zhTW',
+      'fr',
+      'ru',
+      'ja',
+      'vi',
+    ]),
+  }),
   SystemName: z.string().min(1),
   ServerAddress: z.string().optional(),
   TaskPublicAddress: z.string().refine(isValidTaskPublicAddress),
@@ -79,6 +93,10 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
   const updateOption = useUpdateOption()
 
   const normalizedDefaults: SystemInfoFormValues = {
+    console_setting: {
+      default_language:
+        defaultValues.console_setting?.default_language || 'auto',
+    },
     SystemName: normalizeValue(defaultValues.SystemName),
     ServerAddress: normalizeValue(defaultValues.ServerAddress),
     TaskPublicAddress: normalizeValue(defaultValues.TaskPublicAddress),
@@ -96,6 +114,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
   }
 
   const systemInfoSchemaWithI18n = z.object({
+    console_setting: _systemInfoSchema.shape.console_setting,
     SystemName: z.string().min(1, {
       error: () => t('System name is required'),
     }),
@@ -156,6 +175,41 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
             />
             <FormDirtyIndicator isDirty={isDirty} />
             <SettingsFormGrid>
+              <FormField
+                control={form.control}
+                name='console_setting.default_language'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Site default language')}</FormLabel>
+                    <FormControl>
+                      <Combobox
+                        options={[
+                          {
+                            value: 'auto',
+                            label: t('Follow system / browser language'),
+                          },
+                          ...INTERFACE_LANGUAGE_OPTIONS.map((language) => ({
+                            value: language.code,
+                            label: language.label,
+                          })),
+                        ]}
+                        value={field.value}
+                        onValueChange={(value) => {
+                          if (value) field.onChange(value)
+                        }}
+                        placeholder={t('Select language')}
+                        className='w-full'
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Used when no personal language preference is set. Automatic mode follows the system or browser language, with English as the fallback.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name='SystemName'

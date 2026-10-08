@@ -37,6 +37,9 @@ const SITE_SECTIONS = [
       <SystemInfoSection
         defaultValues={{
           SystemName: settings.SystemName,
+          console_setting: {
+            default_language: settings['console_setting.default_language'],
+          },
           Logo: settings.Logo,
           Footer: settings.Footer,
           About: settings.About,

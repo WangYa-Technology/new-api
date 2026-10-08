@@ -91,6 +91,7 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
 }
 
 export function useSummaryCardsConfig(totals: {
+  usagePeriod: '24h' | 'today'
   todayUsageDisplay: string
   usedDisplay: string
   requestCountDisplay: string
@@ -99,14 +100,22 @@ export function useSummaryCardsConfig(totals: {
 }) {
   const { t } = useTranslation()
 
+  const usageDescription =
+    totals.usagePeriod === 'today'
+      ? t('Consumed today')
+      : t('Consumed in the last 24 hours')
+
   return [
     {
       key: 'todayUsage',
-      title: t('Last 24h usage'),
+      title:
+        totals.usagePeriod === 'today'
+          ? t("Today's usage")
+          : t('Last 24h usage'),
       value: totals.todayUsageDisplay,
       description: totals.currencyEnabled
-        ? `${t('Consumed in the last 24 hours')} (${totals.currencyLabel})`
-        : t('Consumed in the last 24 hours'),
+        ? `${usageDescription} (${totals.currencyLabel})`
+        : usageDescription,
       icon: Flame,
     },
     {

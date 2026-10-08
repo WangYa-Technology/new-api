@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { Row } from '@tanstack/react-table'
+import { flexRender, type Row } from '@tanstack/react-table'
 import {
   Trash2,
   Edit,
@@ -57,6 +57,7 @@ import { handleServerError } from '@/lib/handle-server-error'
 import { updateApiKeyStatus } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import { apiKeySchema } from '../types'
+import { ModelLimitsCell, IpRestrictionsCell } from './api-keys-cells'
 import { useApiKeys } from './api-keys-provider'
 
 function getServerAddress(): string {
@@ -220,6 +221,38 @@ export function DataTableRowActions<TData>({
         contentClassName='w-[200px]'
         modal={false}
       >
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>{t('Details')}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className='w-72 max-w-[calc(100vw-2rem)]'>
+            <div
+              className='max-h-80 space-y-3 overflow-y-auto p-2'
+              role='region'
+              aria-label={t('Details')}
+              tabIndex={0}
+            >
+              <ModelLimitsCell apiKey={apiKey} detailsTrigger='inline' />
+              <IpRestrictionsCell apiKey={apiKey} detailsTrigger='inline' />
+              {row
+                .getAllCells()
+                .filter(
+                  (cell) =>
+                    cell.column.id === 'activity_time' ||
+                    cell.column.id === 'expired_time'
+                )
+                .map((cell) => (
+                  <div key={cell.id} className='space-y-1 text-xs'>
+                    <div className='text-muted-foreground font-medium'>
+                      {cell.column.id === 'activity_time'
+                        ? t('Time')
+                        : t('Expires')}
+                    </div>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </div>
+                ))}
+            </div>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={isRealKeyLoading}
           onClick={async () => {

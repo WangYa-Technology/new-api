@@ -69,6 +69,7 @@ import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import {
   createApiKey,
@@ -108,6 +109,7 @@ export function ApiKeysMutateDrawer({
   const currentRowId = currentRow?.id
   const { triggerRefresh } = useApiKeys()
   const { status, loading: statusLoading } = useStatus()
+  const userGroup = useAuthStore((state) => state.auth.user?.group)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [initializedTarget, setInitializedTarget] = useState<string | null>(
@@ -233,8 +235,14 @@ export function ApiKeysMutateDrawer({
         setInitializedTarget(target)
       }
     } else {
+      const defaultGroup =
+        groups.find((group) => group.value === userGroup) ??
+        groups.find((group) => group.value === 'default')
       form.reset(
-        getApiKeyFormDefaultValues(defaultUseAutoGroup && backendHasAuto)
+        getApiKeyFormDefaultValues(
+          defaultUseAutoGroup && backendHasAuto,
+          defaultGroup?.value
+        )
       )
       setInitializedTarget(target)
     }
@@ -246,6 +254,8 @@ export function ApiKeysMutateDrawer({
     defaultUseAutoGroup,
     statusLoading,
     backendHasAuto,
+    userGroup,
+    groups,
     groupsFetched,
     groupsFetching,
     autoGroupsFetched,

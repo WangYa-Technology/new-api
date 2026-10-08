@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type ManageUserAction } from '../types'
+import { USER_ROLE, USER_STATUS, isUserDeleted } from '../constants'
+import type { ManageUserAction, User } from '../types'
 
 // ============================================================================
 // User Action Messages
@@ -36,4 +37,19 @@ const ACTION_MESSAGES: Record<ManageUserAction, string> = {
  */
 export function getUserActionMessage(action: ManageUserAction): string {
   return ACTION_MESSAGES[action]
+}
+
+/** Mirrors server role restrictions for the bulk-disable selection UI. */
+export function canDisableUser(
+  user: User,
+  operatorId: number | undefined,
+  operatorRole: number
+): boolean {
+  return (
+    operatorRole >= USER_ROLE.ADMIN &&
+    user.id !== operatorId &&
+    user.role < operatorRole &&
+    user.status === USER_STATUS.ENABLED &&
+    !isUserDeleted(user)
+  )
 }

@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { InterfaceLanguageCode } from '@/i18n/languages'
+
 export type SystemOption = {
   key: string
   value: string
@@ -141,6 +143,7 @@ export type SystemTaskFilters = {
 }
 
 export type SiteSettings = {
+  'console_setting.default_language': InterfaceLanguageCode | 'auto'
   Notice: string
   SystemName: string
   Logo: string

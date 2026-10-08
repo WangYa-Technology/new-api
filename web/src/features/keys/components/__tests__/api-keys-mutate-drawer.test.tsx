@@ -24,6 +24,7 @@ const { I18nextProvider, initReactI18next } = await import('react-i18next')
 const { QueryClient, QueryClientProvider } =
   await import('@tanstack/react-query')
 const { api } = await import('@/lib/api')
+const { useAuthStore } = await import('@/stores/auth-store')
 const { ApiKeysProvider } = await import('../api-keys-provider')
 const { ApiKeysMutateDrawer } = await import('../api-keys-mutate-drawer')
 
@@ -47,11 +48,16 @@ const originalGet = apiClient.get
 const originalPost = apiClient.post
 let renderedDrawer: RenderedDrawer | null = null
 
-function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
+function installApiFixtures(
+  createdPayloads: Array<Record<string, unknown>>,
+  defaultUseAutoGroup = true
+) {
   apiClient.get = async (url) => {
     switch (url) {
       case '/api/status':
-        return { data: { data: { default_use_auto_group: true } } }
+        return {
+          data: { data: { default_use_auto_group: defaultUseAutoGroup } },
+        }
       case '/api/user/models':
         return { data: { success: true, data: [] } }
       case '/api/user/self/groups':
@@ -84,14 +90,14 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
   }
 }
 
-async function renderCreateDrawer(): Promise<void> {
+async function renderCreateDrawer(defaultUseAutoGroup = true): Promise<void> {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   const freshAt = Date.now() + 60_000
   queryClient.setQueryData(
     ['status'],
-    { default_use_auto_group: true },
+    { default_use_auto_group: defaultUseAutoGroup },
     { updatedAt: freshAt }
   )
   queryClient.setQueryData(
@@ -194,6 +200,7 @@ function selectComboboxOption(
 }
 
 afterEach(() => {
+  useAuthStore.setState(useAuthStore.getInitialState(), true)
   apiClient.get = originalGet
   apiClient.post = originalPost
   localStorage.clear()
@@ -277,4 +284,27 @@ describe('API keys mutate drawer Auto group integration', () => {
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
     expect(createdPayloads[0]?.auto_groups).toEqual(['vip'])
   })
+})
+
+describe('API key default user group', () => {
+  test.each([
+    ['default', 'default', 'Standard access'],
+    ['vip', 'vip', 'Priority access'],
+    ['unavailable', 'default', 'Standard access'],
+  ])(
+    'selects an available default for user group %s and submits %s',
+    async (userGroup, expectedGroup, description) => {
+      useAuthStore
+        .getState()
+        .auth.setUser({ id: 3, username: 'user', role: 1, group: userGroup })
+      const createdPayloads: Array<Record<string, unknown>> = []
+      installApiFixtures(createdPayloads, false)
+      await renderCreateDrawer(false)
+      expect(getControlByLabel('Group')).toHaveTextContent(description)
+      changeInput(getControlByLabel('Name'), 'default-group-key')
+      fireEvent.click(findButton('Save changes', true))
+      await waitFor(() => expect(createdPayloads).toHaveLength(1))
+      expect(createdPayloads[0]?.group).toBe(expectedGroup)
+    }
+  )
 })

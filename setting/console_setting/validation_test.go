@@ -224,3 +224,12 @@ func TestValidateFooterRejectsMissingLinkCollections(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "缺少社交链接或分栏列表")
 }
+
+func TestValidateDefaultLanguage(t *testing.T) {
+	for _, language := range []string{"auto", "en", "zhCN", "zhTW", "fr", "ru", "ja", "vi"} {
+		t.Run(language, func(t *testing.T) { require.NoError(t, ValidateDefaultLanguage(language)) })
+	}
+	for _, language := range []string{"", "de", "zh", "zh-CN", "automatic", " en "} {
+		t.Run("reject_"+language, func(t *testing.T) { require.Error(t, ValidateDefaultLanguage(language)) })
+	}
+}

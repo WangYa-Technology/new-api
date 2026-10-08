@@ -66,6 +66,7 @@ func GetStatus(c *gin.Context) {
 		"telegram_bot_name":           common.TelegramBotName,
 		"theme":                       "default",
 		"system_name":                 common.SystemName,
+		"default_language":            cs.DefaultLanguage,
 		"logo":                        common.Logo,
 		"footer_html":                 common.Footer,
 		"footer_config":               console_setting.GetFooterConfig(),

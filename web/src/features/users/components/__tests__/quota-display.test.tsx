@@ -264,6 +264,7 @@ async function renderUsersList(emptyInvitation = false) {
           {
             id: 2,
             username: 'long-user-name-for-table-layout',
+            email: 'long-user-email@example.com',
             display_name: 'A display name',
             role: 1,
             status: 1,
@@ -305,7 +306,7 @@ async function renderUsersList(emptyInvitation = false) {
       </QueryClientProvider>
     </I18nextProvider>
   )
-  await screen.findByText('long-user-name-for-table-layout')
+  await screen.findByText('long-user-email@example.com')
   return get
 }
 
@@ -365,7 +366,7 @@ it('combines creation and last login into one column with full dates visible dir
     screen.queryByRole('columnheader', { name: /Last Login/ })
   ).not.toBeInTheDocument()
   const row = screen.getByRole('row', {
-    name: /long-user-name-for-table-layout/,
+    name: /long-user-email@example.com/,
   })
   expect(within(row).getByText('—')).toBeInTheDocument()
   const times = within(row).getAllByRole('time')

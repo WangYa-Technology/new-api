@@ -62,6 +62,9 @@ export function useUsersColumns(): ColumnDef<User>[] {
             onCheckedChange={(value) =>
               table.toggleAllPageRowsSelected(!!value)
             }
+            disabled={
+              !table.getRowModel().rows.some((row) => row.getCanSelect())
+            }
             aria-label={t('Select all')}
             className='translate-y-[2px]'
           />
@@ -70,6 +73,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
+            disabled={!row.getCanSelect()}
             aria-label={t('Select row')}
             className='translate-y-[2px]'
           />
@@ -93,18 +97,19 @@ export function useUsersColumns(): ColumnDef<User>[] {
         meta: { mobileOrder: 10 },
       },
       {
-        accessorKey: 'username',
-        header: t('Username'),
+        accessorKey: 'email',
+        header: t('Email'),
+        enableSorting: false,
         cell: ({ row }) => {
-          const username = row.getValue('username') as string
+          const email = row.original.email?.trim() || '—'
           const displayName = row.original.display_name
           const remark = row.original.remark
 
           return (
             <div className='flex min-w-[160px] flex-col gap-1'>
               <div className='flex items-center gap-2'>
-                <LongText className='max-w-[140px] text-sm font-normal'>
-                  {username}
+                <LongText className='max-w-[200px] text-sm font-normal'>
+                  {email}
                 </LongText>
                 {remark && (
                   <Tooltip>
@@ -125,14 +130,16 @@ export function useUsersColumns(): ColumnDef<User>[] {
                   </Tooltip>
                 )}
               </div>
-              {displayName && displayName !== username && (
-                <div
-                  data-table-text='secondary'
-                  className='text-muted-foreground max-w-[180px] text-xs font-normal'
-                >
-                  <LongText>{displayName}</LongText>
-                </div>
-              )}
+              {displayName &&
+                displayName !== row.original.username &&
+                displayName !== email && (
+                  <div
+                    data-table-text='secondary'
+                    className='text-muted-foreground max-w-[180px] text-xs font-normal'
+                  >
+                    <LongText>{displayName}</LongText>
+                  </div>
+                )}
             </div>
           )
         },

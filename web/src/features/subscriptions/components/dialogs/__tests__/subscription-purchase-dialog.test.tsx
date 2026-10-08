@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, test, vi } from 'vitest'
 
@@ -45,6 +46,7 @@ const plan: PlanRecord = {
 describe('subscription purchase dialog payment methods', () => {
   test('uses the configured payment icon for an Epay method', () => {
     render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <SubscriptionPurchaseDialog
         open
         onOpenChange={vi.fn()}
@@ -58,6 +60,7 @@ describe('subscription purchase dialog payment methods', () => {
           },
         ]}
       />
+      </QueryClientProvider>
     )
 
     expect(screen.getByRole('img', { name: 'Local Pay' })).toHaveAttribute(
