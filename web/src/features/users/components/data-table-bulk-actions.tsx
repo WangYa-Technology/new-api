@@ -41,7 +41,7 @@ interface DataTableBulkActionsProps {
 
 export function DataTableBulkActions(props: DataTableBulkActionsProps) {
   const { t } = useTranslation()
-  const { triggerRefresh } = useUsers()
+  const { triggerRefresh, requestVerification, verificationActive } = useUsers()
   const operator = useAuthStore((state) => state.auth.user)
   const [targets, setTargets] = useState<User[] | null>(null)
   const processing = useRef(false)
@@ -57,15 +57,29 @@ export function DataTableBulkActions(props: DataTableBulkActionsProps) {
       // Keep requests sequential to respect management API rate limits.
       for (const user of users) {
         try {
-          requireServerSuccess(await manageUser(user.id, 'disable'))
+          const proof = await requestVerification({
+            scope: 'admin.user.manage',
+            context: { user_id: user.id, action: 'disable' },
+            title: t('Verify to disable user'),
+            description: t(
+              'Confirm your identity before changing the account {{username}}.',
+              {
+                username: user.email?.trim() || `ID: ${user.id}`,
+              }
+            ),
+          })
+          if (!proof) return { succeeded, firstError, cancelled: true }
+          requireServerSuccess(
+            await manageUser(user.id, 'disable', proof.proof_token)
+          )
           succeeded.add(String(user.id))
         } catch (error) {
           firstError ??= error
         }
       }
-      return { succeeded, firstError }
+      return { succeeded, firstError, cancelled: false }
     },
-    onSuccess: ({ succeeded, firstError }) => {
+    onSuccess: ({ succeeded, firstError, cancelled }, users) => {
       props.table.setRowSelection((previous) => {
         const next = { ...previous }
         for (const id of succeeded) delete next[id]
@@ -76,7 +90,11 @@ export function DataTableBulkActions(props: DataTableBulkActionsProps) {
       }
       if (firstError) handleServerError(firstError, t('Batch disable failed'))
       triggerRefresh()
-      setTargets(null)
+      setTargets(
+        cancelled
+          ? users.filter((user) => !succeeded.has(String(user.id)))
+          : null
+      )
     },
     onError: (error) => handleServerError(error, t('Batch disable failed')),
     onSettled: () => {
@@ -105,7 +123,7 @@ export function DataTableBulkActions(props: DataTableBulkActionsProps) {
         </Button>
       </BulkActionsToolbar>
       <ConfirmDialog
-        open={targets !== null}
+        open={targets !== null && !verificationActive}
         onOpenChange={(open) => {
           if (!open && !processing.current) setTargets(null)
         }}

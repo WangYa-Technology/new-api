@@ -66,8 +66,23 @@ const users: User[] = [
 
 async function renderUsers(data = users, role = 10) {
   useAuthStore.getState().auth.setUser({ id: 1, username: 'operator', role })
-  const get = vi.spyOn(api, 'get').mockResolvedValue({
-    data: { success: true, data: { items: data, total: data.length } },
+  const get = vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/verify/methods') {
+      return {
+        data: {
+          success: true,
+          data: {
+            scope: 'admin.user.manage',
+            methods: [{ method: '2fa', available: true }],
+            oauth_providers: [],
+            password_encryption_enabled: false,
+          },
+        },
+      }
+    }
+    return {
+      data: { success: true, data: { items: data, total: data.length } },
+    }
   })
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const root = createRootRoute()
@@ -98,6 +113,39 @@ async function renderUsers(data = users, role = 10) {
     ).toHaveLength(data.length)
   )
   return get
+}
+
+function mockManagement(manage: (id: number) => Promise<unknown>) {
+  return vi.spyOn(api, 'post').mockImplementation(async (url, payload) => {
+    if (url === '/api/verify') {
+      return {
+        data: {
+          success: true,
+          data: {
+            proof_token: `proof-${(payload as { context: { user_id: number } }).context.user_id}`,
+            method: '2fa',
+            scope: 'admin.user.manage',
+            expires_at: Math.floor(Date.now() / 1000) + 60,
+          },
+        },
+      }
+    }
+    if (url === '/api/user/manage') {
+      return manage((payload as { id: number }).id)
+    }
+    throw new Error(`Unexpected POST ${url}`)
+  })
+}
+
+async function verifyUser(email: string) {
+  await screen.findByText(
+    `Confirm your identity before changing the account ${email}.`
+  )
+  await userEvent.type(
+    await screen.findByLabelText('Authenticator code or backup code'),
+    '123456'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Verify' }))
 }
 
 afterEach(() => {
@@ -143,7 +191,7 @@ it('requires confirmation, prevents duplicate submission, disables only selected
   const pending = new Promise<void>((resolve) => {
     finish = resolve
   })
-  const post = vi.spyOn(api, 'post').mockImplementation(async () => {
+  const post = mockManagement(async () => {
     await pending
     return { data: { success: true } }
   })
@@ -166,18 +214,32 @@ it('requires confirmation, prevents duplicate submission, disables only selected
     name: 'Disable',
   })
   await user.dblClick(confirm)
-  expect(confirm).toBeDisabled()
-  expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
-  await act(async () => finish())
+  await screen.findByLabelText('Authenticator code or backup code')
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  expect(post).not.toHaveBeenCalled()
+  await verifyUser('alpha@example.com')
   await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
-  expect(post).toHaveBeenNthCalledWith(1, '/api/user/manage', {
-    id: 2,
-    action: 'disable',
-  })
-  expect(post).toHaveBeenNthCalledWith(2, '/api/user/manage', {
-    id: 3,
-    action: 'disable',
-  })
+  await act(async () => finish())
+  await verifyUser('beta@example.com')
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(4))
+  for (const id of [2, 3]) {
+    expect(post).toHaveBeenCalledWith(
+      '/api/verify',
+      expect.objectContaining({
+        scope: 'admin.user.manage',
+        context: { user_id: id, action: 'disable' },
+      }),
+      expect.anything()
+    )
+    expect(post).toHaveBeenCalledWith(
+      '/api/user/manage',
+      { id, action: 'disable' },
+      {
+        headers: { 'X-Security-Proof': `proof-${id}` },
+        singleUseAuthorization: true,
+      }
+    )
+  }
   await waitFor(() =>
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   )
@@ -190,16 +252,14 @@ it.each([false, true])(
   'retains only failed users for retry after a partial failure (network: %s)',
   async (networkFailure) => {
     const user = userEvent.setup()
-    const post = vi
-      .spyOn(api, 'post')
-      .mockResolvedValueOnce({ data: { success: true } })
-    if (networkFailure) {
-      post.mockRejectedValueOnce(new Error('Connection lost'))
-    } else {
-      post.mockResolvedValueOnce({
-        data: { success: false, message: 'Permission changed' },
-      })
-    }
+    let fail = true
+    const post = mockManagement(async (id) => {
+      if (id === 3 && fail) {
+        if (networkFailure) throw new Error('Connection lost')
+        return { data: { success: false, message: 'Permission changed' } }
+      }
+      return { data: { success: true } }
+    })
     await renderUsers()
     await user.click(screen.getByRole('checkbox', { name: 'Select all' }))
     await user.click(
@@ -207,13 +267,16 @@ it.each([false, true])(
     )
     const dialog = await screen.findByRole('alertdialog')
     await user.click(within(dialog).getByRole('button', { name: 'Disable' }))
+    await verifyUser('alpha@example.com')
+    await verifyUser('beta@example.com')
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(4))
     await waitFor(() =>
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     )
     const checkboxes = screen.getAllByRole('checkbox', { name: 'Select row' })
     expect(checkboxes[1]).not.toBeChecked()
     expect(checkboxes[2]).toBeChecked()
-    post.mockResolvedValueOnce({ data: { success: true } })
+    fail = false
     await user.click(
       screen.getByRole('button', { name: 'Disable selected users' })
     )
@@ -222,11 +285,19 @@ it.each([false, true])(
       within(retry).queryByText('alpha@example.com')
     ).not.toBeInTheDocument()
     await user.click(within(retry).getByRole('button', { name: 'Disable' }))
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(3))
-    expect(post).toHaveBeenLastCalledWith('/api/user/manage', {
-      id: 3,
-      action: 'disable',
-    })
+    await verifyUser('beta@example.com')
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(6))
+    expect(post).toHaveBeenLastCalledWith(
+      '/api/user/manage',
+      {
+        id: 3,
+        action: 'disable',
+      },
+      {
+        headers: { 'X-Security-Proof': 'proof-3' },
+        singleUseAuthorization: true,
+      }
+    )
   }
 )
 
@@ -251,4 +322,35 @@ it('does not transfer a selection to a different user when the page data changes
   expect(
     screen.queryByRole('button', { name: 'Disable selected users' })
   ).not.toBeInTheDocument()
+})
+
+it('cancelling verification stops the batch and preserves remaining selections', async () => {
+  const post = mockManagement(async () => ({ data: { success: true } }))
+  await renderUsers()
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Select all' }))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Disable selected users' })
+  )
+  await userEvent.click(
+    within(await screen.findByRole('alertdialog')).getByRole('button', {
+      name: 'Disable',
+    })
+  )
+  await verifyUser('alpha@example.com')
+  await screen.findByText(
+    'Confirm your identity before changing the account beta@example.com.'
+  )
+  await userEvent.keyboard('{Escape}')
+  const dialog = await screen.findByRole('alertdialog')
+  expect(
+    within(dialog).queryByText('alpha@example.com')
+  ).not.toBeInTheDocument()
+  expect(within(dialog).getByText('beta@example.com')).toBeVisible()
+  expect(post).toHaveBeenCalledTimes(2)
+  const rows = screen.getAllByRole('checkbox', {
+    name: 'Select row',
+    hidden: true,
+  })
+  expect(rows[1]).not.toBeChecked()
+  expect(rows[2]).toBeChecked()
 })
