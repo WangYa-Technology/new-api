@@ -94,6 +94,7 @@ type User struct {
 	VerificationCode     string                     `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
 	AccessToken          *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // Deprecated: 旧版面板访问令牌，仅在升级后的过渡期内使用；删除 users.access_token 列时一并移除。
 	AccessTokenCreatedAt *int64                     `json:"-" gorm:"type:bigint;column:access_token_created_at"`    // Deprecated: 旧版面板访问令牌，仅在升级后的过渡期内使用；删除 users.access_token 列时一并移除。
+	AlipayCredit         int64                      `json:"-"`
 	Quota                int                        `json:"quota" gorm:"type:int;default:0"`
 	UsedQuota            int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount         int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
@@ -116,16 +117,17 @@ type User struct {
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:          user.Id,
-		Group:       user.Group,
-		Quota:       user.Quota,
-		Status:      user.Status,
-		Role:        user.Role,
-		Username:    user.Username,
-		Setting:     user.Setting,
-		Email:       user.Email,
-		AuthVersion: user.AuthVersion,
-		CacheSchema: userCacheSchemaVersion,
+		Id:           user.Id,
+		Group:        user.Group,
+		Quota:        user.Quota,
+		AlipayCredit: user.AlipayCredit,
+		Status:       user.Status,
+		Role:         user.Role,
+		Username:     user.Username,
+		Setting:      user.Setting,
+		Email:        user.Email,
+		AuthVersion:  user.AuthVersion,
+		CacheSchema:  userCacheSchemaVersion,
 	}
 	return cache
 }

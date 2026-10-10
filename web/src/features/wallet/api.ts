@@ -246,3 +246,68 @@ export async function completeOrder(
   const res = await api.post('/api/user/topup/complete', request)
   return res.data
 }
+
+export async function calculateAlipayAmount(
+  request: AmountRequest
+): Promise<AmountResponse> {
+  return (await api.post('/api/user/alipay/amount', request)).data
+}
+
+export async function requestAlipayPayment(
+  amount: number,
+  expectedAmount: string
+): Promise<
+  ApiResponse<{
+    pay_link: string
+    trade_no: string
+    amount: string
+    currency: 'CNY'
+  }>
+> {
+  return (
+    await api.post('/api/user/alipay/pay', {
+      amount,
+      expected_amount: expectedAmount,
+      mobile: /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),
+    })
+  ).data
+}
+
+export async function getAlipayOrderStatus(
+  tradeNo: string
+): Promise<ApiResponse<{ status: string }>> {
+  return (
+    await api.get(`/api/user/alipay/order/${encodeURIComponent(tradeNo)}`)
+  ).data
+}
+
+export async function calculateWechatPayAmount(
+  request: AmountRequest
+): Promise<AmountResponse> {
+  return (await api.post('/api/user/wechatpay/amount', request)).data
+}
+export interface WechatPayCheckout {
+  code_url: string
+  trade_no: string
+  amount: string
+  currency: 'CNY'
+  expires_at: number
+}
+export async function requestWechatPayPayment(
+  amount: number,
+  expectedAmount: string
+): Promise<ApiResponse<WechatPayCheckout>> {
+  return (
+    await api.post('/api/user/wechatpay/pay', {
+      amount,
+      expected_amount: expectedAmount,
+    })
+  ).data
+}
+export async function getWechatPayOrderStatus(
+  tradeNo: string
+): Promise<ApiResponse<{ status: string }>> {
+  return (
+    await api.get(`/api/user/wechatpay/order/${encodeURIComponent(tradeNo)}`)
+  ).data
+}

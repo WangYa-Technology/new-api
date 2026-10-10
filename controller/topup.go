@@ -96,7 +96,27 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	alipayConfig, alipayErr := model.CurrentAlipayConfig()
+	enableAlipay := alipayErr == nil && alipayConfig.Enabled && complianceConfirmed
+	filteredMethods := make([]map[string]string, 0, len(payMethods)+1)
+	for _, method := range payMethods {
+		if method["type"] != model.PaymentMethodAlipayDirect && method["type"] != model.PaymentMethodWechatPay {
+			filteredMethods = append(filteredMethods, method)
+		}
+	}
+	payMethods = filteredMethods
+	if enableAlipay {
+		payMethods = append(payMethods, map[string]string{"name": "Alipay", "type": model.PaymentMethodAlipayDirect, "icon": "SiAlipay", "min_topup": alipayMinimum(alipayConfig)})
+	}
+	wechatConfig, wechatErr := model.CurrentWechatPayConfig()
+	enableWechat := wechatErr == nil && wechatConfig.Enabled && complianceConfirmed
+	if enableWechat {
+		payMethods = append(payMethods, map[string]string{"name": "WeChat Pay", "type": model.PaymentMethodWechatPay, "icon": "SiWechat", "min_topup": alipayMinimum(&model.AlipayConfig{MinTopUp: wechatConfig.MinTopUp})})
+	}
+
 	data := gin.H{
+		"enable_wechatpay_topup":           enableWechat,
+		"enable_alipay_topup":              enableAlipay,
 		"enable_online_topup":              isEpayTopUpEnabled(),
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
 		"enable_creem_topup":               isCreemTopUpEnabled(),
@@ -121,6 +141,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 		"topup_link":              common.TopUpLink,
 	}
+
 	common.ApiSuccess(c, data)
 }
 
@@ -294,7 +315,7 @@ func RequestEpay(c *gin.Context) {
 		return
 	}
 
-	if !operation_setting.ContainsPayMethod(req.PaymentMethod) {
+	if req.PaymentMethod == model.PaymentMethodWechatPay || req.PaymentMethod == model.PaymentMethodAlipayDirect || !operation_setting.ContainsPayMethod(req.PaymentMethod) {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "支付方式不存在"})
 		return
 	}
@@ -533,6 +554,14 @@ func GetUserTopUps(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
+	if err := model.PopulateAlipayTopUpQuotas(topups); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.PopulateWechatPayTopUpQuotas(topups); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	pageInfo.SetItems(topups)
 	common.ApiSuccess(c, pageInfo)
 }
@@ -558,6 +587,14 @@ func GetAllTopUps(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
+	if err := model.PopulateAlipayTopUpQuotas(topups); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.PopulateWechatPayTopUpQuotas(topups); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	pageInfo.SetItems(topups)
 	common.ApiSuccess(c, pageInfo)
 }
@@ -578,6 +615,30 @@ func AdminCompleteTopUp(c *gin.Context) {
 	LockOrder(req.TradeNo)
 	defer UnlockOrder(req.TradeNo)
 
+	if topUp := model.GetTopUpByTradeNo(req.TradeNo); topUp != nil && topUp.PaymentProvider == model.PaymentProviderAlipay {
+		if err := service.ReconcileAlipayOrder(c.Request.Context(), req.TradeNo); err != nil {
+			common.ApiErrorMsg(c, "支付宝订单尚未完成，请稍后重试")
+			return
+		}
+		if updated := model.GetTopUpByTradeNo(req.TradeNo); updated == nil || updated.Status != common.TopUpStatusSuccess {
+			common.ApiErrorMsg(c, "支付宝订单尚未完成，请稍后重试")
+			return
+		}
+		common.ApiSuccess(c, nil)
+		return
+	}
+	if topUp := model.GetTopUpByTradeNo(req.TradeNo); topUp != nil && topUp.PaymentProvider == model.PaymentProviderWechatPay {
+		if err := service.ReconcileWechatPayOrder(c.Request.Context(), req.TradeNo); err != nil {
+			common.ApiErrorMsg(c, "微信支付订单尚未完成，请稍后重试")
+			return
+		}
+		if updated := model.GetTopUpByTradeNo(req.TradeNo); updated == nil || updated.Status != common.TopUpStatusSuccess {
+			common.ApiErrorMsg(c, "微信支付订单尚未完成，请稍后重试")
+			return
+		}
+		common.ApiSuccess(c, nil)
+		return
+	}
 	if err := model.ManualCompleteTopUp(req.TradeNo, c.ClientIP()); err != nil {
 		common.ApiError(c, err)
 		return

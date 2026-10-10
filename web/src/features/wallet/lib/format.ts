@@ -16,6 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  getCurrencyDisplay,
+  formatLocalCurrencyAmount,
+  formatQuotaWithCurrency,
+} from '@/lib/currency'
+
 import { DEFAULT_DISCOUNT_RATE } from '../constants'
 
 // ============================================================================
@@ -93,4 +99,16 @@ export function calculatePresetPricing(
     savedAmount,
     hasDiscount,
   }
+}
+
+// Direct payment input is already in site currency (or raw quota in token display mode).
+export function formatDirectTopUpAmount(amount: number): string {
+  if (getCurrencyDisplay().config.quotaDisplayType === 'TOKENS') {
+    return formatQuotaWithCurrency(amount)
+  }
+  return formatLocalCurrencyAmount(amount, {
+    digitsLarge: 2,
+    digitsSmall: 2,
+    abbreviate: false,
+  })
 }

@@ -182,3 +182,42 @@ func TestSecurityProofBindsAccessTokenSession(t *testing.T) {
 		assert.ErrorIs(t, err, ErrAuthTokenInvalid, sessionID)
 	}
 }
+
+func TestDirectPaymentConfigProofBindsExactRevision(t *testing.T) {
+	for _, scope := range []string{VerificationScopeAlipayConfig, VerificationScopeWechatPayConfig} {
+		t.Run(scope, func(t *testing.T) {
+			user := setupAuthSessionTestDB(t)
+			require.NoError(t, model.DB.AutoMigrate(&model.TwoFA{}, &model.PasskeyCredential{}))
+			require.NoError(t, model.DB.Model(user).Update("role", common.RoleRootUser).Error)
+			require.NoError(t, model.DB.Create(&model.UserSession{SID: "alipay-session", UserID: user.Id, Version: 1, UserAuthVersion: 1, Status: model.UserSessionStatusActive, RefreshHash: "alipay-test-hash", ExpiresAt: time.Now().Add(time.Hour).Unix()}).Error)
+			useTestSessionSecret(t)
+			identity := AuthIdentity{UserID: user.Id, SessionID: "alipay-session", UserAuthVersion: 1, SessionVersion: 1}
+			require.NoError(t, model.DB.Model(user).Update("role", common.RoleCommonUser).Error)
+			_, denied := GetVerificationRequirements(identity, scope)
+			assert.ErrorIs(t, denied, ErrVerificationForbidden)
+			require.NoError(t, model.DB.Model(user).Update("role", common.RoleRootUser).Error)
+			tokenIdentity := identity
+			tokenIdentity.SessionID = model.AccessTokenSessionID(7)
+			_, denied = GetVerificationRequirements(tokenIdentity, scope)
+			require.Error(t, denied)
+			operation := VerificationOperation{Scope: scope, Context: []byte(`{"config_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`)}
+			binding, err := BindVerificationOperation(operation)
+			require.NoError(t, err)
+			proof, _, err := IssueSecurityProof(identity, "password", binding)
+			require.NoError(t, err)
+			changed := operation
+			changed.Context = []byte(`{"config_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`)
+			_, err = ConsumeOperationProof(proof, identity, changed)
+			assert.ErrorIs(t, err, ErrProofContext)
+			_, err = ConsumeOperationProof(proof, identity, operation)
+			require.NoError(t, err)
+			_, err = ConsumeOperationProof(proof, identity, operation)
+			require.Error(t, err)
+			for _, context := range []string{`{}`, `{"config_hash":"short"}`, `{"config_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","extra":1}`} {
+				_, err := BindVerificationOperation(VerificationOperation{Scope: scope, Context: []byte(context)})
+				require.Error(t, err)
+			}
+
+		})
+	}
+}

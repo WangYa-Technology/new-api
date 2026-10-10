@@ -13,6 +13,7 @@ import (
 )
 
 type TopUp struct {
+	CreditedQuota   int     `json:"credited_quota,omitempty" gorm:"-"`
 	Id              int     `json:"id"`
 	UserId          int     `json:"user_id" gorm:"index"`
 	Amount          int64   `json:"amount"`
@@ -475,6 +476,10 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 
 		if topUp.Status != common.TopUpStatusPending {
 			return errors.New("订单状态不是待支付，无法补单")
+		}
+
+		if topUp.PaymentProvider == PaymentProviderAlipay || topUp.PaymentProvider == PaymentProviderWechatPay {
+			return errors.New("直连支付订单必须先查单确认付款")
 		}
 
 		// 计算应充值额度：

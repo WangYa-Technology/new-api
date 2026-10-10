@@ -120,6 +120,8 @@ export interface WaffoPayMethod {
  * Topup configuration information
  */
 export interface TopupInfo {
+  enable_wechatpay_topup?: boolean
+  enable_alipay_topup?: boolean
   /** Whether online topup is enabled */
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */
@@ -253,6 +255,7 @@ export type TopupStatus = 'success' | 'pending' | 'expired'
  * Topup billing record
  */
 export interface TopupRecord {
+  credited_quota?: number
   /** Record ID */
   id: number
   /** User ID */

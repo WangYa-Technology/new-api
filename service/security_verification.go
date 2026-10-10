@@ -2,6 +2,7 @@ package service
 
 import (
 	"crypto/hmac"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -21,6 +22,8 @@ const (
 	VerificationMethodPassword           = "password"
 	VerificationMethodOAuth              = "oauth"
 	VerificationMethodSession            = "session"
+	VerificationScopeWechatPayConfig     = "payment.wechatpay.configure"
+	VerificationScopeAlipayConfig        = "payment.alipay.configure"
 	VerificationScopeChannelKeyRead      = "channel.key.read"
 	VerificationScopePasskeyRegister     = "passkey.register"
 	VerificationScopePasskeyDelete       = "passkey.delete"
@@ -163,6 +166,15 @@ func BindVerificationOperation(operation VerificationOperation) (VerificationBin
 	}
 	var normalized any
 	switch operation.Scope {
+	case VerificationScopeAlipayConfig, VerificationScopeWechatPayConfig:
+		var hash string
+		if len(fields) != 1 || common.Unmarshal(fields["config_hash"], &hash) != nil || len(hash) != 64 {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		if _, err := hex.DecodeString(hash); err != nil {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		normalized = map[string]string{"config_hash": hash}
 	case VerificationScopeChannelKeyRead:
 		var context ChannelKeyReadContext
 		if len(fields) != 1 || common.Unmarshal(fields["channel_id"], &context.ChannelID) != nil || context.ChannelID <= 0 {
@@ -324,7 +336,7 @@ func securityVerificationPolicy(scope string, state model.UserVerificationState)
 		if !state.HasTwoFA {
 			return nil, model.ErrTwoFANotEnabled
 		}
-	case VerificationScopePasskeyRegister, VerificationScopeTwoFASetup,
+	case VerificationScopeAlipayConfig, VerificationScopeWechatPayConfig, VerificationScopePasskeyRegister, VerificationScopeTwoFASetup,
 		VerificationScopeAccessTokenGenerate, VerificationScopeAccessTokenUpdate, VerificationScopeAccessTokenRevoke,
 		VerificationScopeAccountBind, VerificationScopeAccountUnbind,
 		VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
@@ -375,7 +387,7 @@ func GetVerificationRequirements(identity AuthIdentity, scope string) (*Verifica
 	if state.Status != common.UserStatusEnabled || state.AuthVersion != identity.UserAuthVersion {
 		return nil, ErrAuthTokenInvalid
 	}
-	if scope == VerificationScopeChannelKeyRead && state.Role != common.RoleRootUser {
+	if (scope == VerificationScopeChannelKeyRead || scope == VerificationScopeAlipayConfig || scope == VerificationScopeWechatPayConfig) && state.Role != common.RoleRootUser {
 		return nil, ErrVerificationForbidden
 	}
 	if strings.HasPrefix(scope, verificationScopeAdminUserPrefix) && state.Role < common.RoleAdminUser {
@@ -392,7 +404,7 @@ func GetVerificationRequirements(identity AuthIdentity, scope string) (*Verifica
 	for i := range methods {
 		if methods[i].Method == VerificationMethodPassword && !common.PasswordLoginEnabled {
 			switch scope {
-			case VerificationScopeAccountBind, VerificationScopeAccountUnbind, VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
+			case VerificationScopeAlipayConfig, VerificationScopeWechatPayConfig, VerificationScopeAccountBind, VerificationScopeAccountUnbind, VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
 				VerificationScopeAdminUserCreate, VerificationScopeAdminUserUpdate, VerificationScopeAdminUserDelete,
 				VerificationScopeAdminUserManage, VerificationScopeAdminUserPasskeyReset,
 				VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear:

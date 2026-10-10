@@ -18,6 +18,8 @@ import (
 // instances and each run is recorded as one task row. Call this before
 // service.StartSystemTaskRunner.
 func RegisterScheduledSystemTasks() {
+	service.RegisterSystemTaskHandler(alipayReconcileHandler{})
+	service.RegisterSystemTaskHandler(wechatpayReconcileHandler{})
 	service.RegisterSystemTaskHandler(channelTestHandler{})
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
@@ -160,4 +162,40 @@ func finishSystemTaskHandler(task *model.SystemTask, runnerID string, status mod
 	if err := model.FinishSystemTask(task.TaskID, runnerID, status, result, errorMessage); err != nil {
 		common.SysLog(fmt.Sprintf("system task %s failed to persist result: %v", task.TaskID, err))
 	}
+}
+
+// Keep servicing existing orders even when new Alipay payments are disabled.
+type alipayReconcileHandler struct{}
+
+func (alipayReconcileHandler) Type() string { return "alipay_reconcile" }
+func (alipayReconcileHandler) Enabled() bool {
+	var count int64
+	return model.DB.Model(&model.AlipayOrder{}).Where("status IN ? OR cache_pending = ?", []string{common.TopUpStatusPending, "paid"}, true).Limit(1).Count(&count).Error == nil && count > 0
+}
+func (alipayReconcileHandler) Interval() time.Duration { return time.Minute }
+func (alipayReconcileHandler) NewPayload() any         { return nil }
+func (alipayReconcileHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	if err := service.RunAlipayReconciliation(ctx); err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, nil, nil)
+}
+
+// Keep servicing existing orders even when new WechatPay payments are disabled.
+type wechatpayReconcileHandler struct{}
+
+func (wechatpayReconcileHandler) Type() string { return "wechatpay_reconcile" }
+func (wechatpayReconcileHandler) Enabled() bool {
+	var count int64
+	return model.DB.Model(&model.WechatPayOrder{}).Where("status IN ? OR cache_pending = ?", []string{common.TopUpStatusPending, "paid"}, true).Limit(1).Count(&count).Error == nil && count > 0
+}
+func (wechatpayReconcileHandler) Interval() time.Duration { return time.Minute }
+func (wechatpayReconcileHandler) NewPayload() any         { return nil }
+func (wechatpayReconcileHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	if err := service.RunWechatPayReconciliation(ctx); err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, nil, nil)
 }

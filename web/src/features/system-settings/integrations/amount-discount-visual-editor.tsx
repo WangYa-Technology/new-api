@@ -24,6 +24,8 @@ import { StaticDataTable } from '@/components/data-table/static/static-data-tabl
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { formatDirectTopUpAmount } from '@/features/wallet/lib/format'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { safeJsonParseWithValidation } from '../utils/json-parser'
 import { isObjectRecord } from '../utils/json-validators'
@@ -42,6 +44,7 @@ export function AmountDiscountVisualEditor({
   onChange,
 }: AmountDiscountVisualEditorProps) {
   const { t } = useTranslation()
+  useSystemConfigStore((state) => state.config.currency)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editData, setEditData] = useState<AmountDiscountData | null>(null)
 
@@ -152,7 +155,9 @@ export function AmountDiscountVisualEditor({
                 id: 'amount',
                 header: t('Recharge Amount'),
                 cell: (discount) => (
-                  <span className='font-mono text-sm'>${discount.amount}</span>
+                  <span className='font-mono text-sm'>
+                    {formatDirectTopUpAmount(discount.amount)}
+                  </span>
                 ),
               },
               {
@@ -202,7 +207,7 @@ export function AmountDiscountVisualEditor({
                 <div className='mb-3 flex items-start justify-between'>
                   <div className='flex-1'>
                     <div className='mb-2 font-mono text-base font-medium'>
-                      ${discount.amount}
+                      {formatDirectTopUpAmount(discount.amount)}
                     </div>
                     <StatusBadge
                       variant={discount.discountRate < 1 ? 'info' : 'neutral'}

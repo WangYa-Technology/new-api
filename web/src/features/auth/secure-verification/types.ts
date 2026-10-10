@@ -25,6 +25,8 @@ export type VerificationMethod =
   | 'oauth'
   | 'session'
 export type SecurityProofScope =
+  | 'payment.alipay.configure'
+  | 'payment.wechatpay.configure'
   | 'channel.key.read'
   | 'passkey.register'
   | 'passkey.delete'
@@ -51,6 +53,10 @@ export type SecurityProofScope =
 export type AdminUserManageAction = 'disable' | 'enable' | 'promote' | 'demote'
 
 export type VerificationOperation =
+  | {
+      scope: 'payment.alipay.configure' | 'payment.wechatpay.configure'
+      context: { config_hash: string }
+    }
   | { scope: 'channel.key.read'; context: { channel_id: number } }
   | {
       scope: 'account.binding.bind'
@@ -91,6 +97,8 @@ export type VerificationOperation =
   | {
       scope: Exclude<
         SecurityProofScope,
+        | 'payment.alipay.configure'
+        | 'payment.wechatpay.configure'
         | 'channel.key.read'
         | 'account.binding.bind'
         | 'account.binding.unbind'

@@ -24,6 +24,11 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 import {
   calculateAmount,
+  calculateAlipayAmount,
+  calculateWechatPayAmount,
+  requestWechatPayPayment,
+  type WechatPayCheckout,
+  requestAlipayPayment,
   calculateStripeAmount,
   calculateWaffoAmount,
   calculateWaffoPancakeAmount,
@@ -46,6 +51,8 @@ import type { AmountRequest, AmountResponse } from '../types'
 type AmountCalculator = (request: AmountRequest) => Promise<AmountResponse>
 
 export interface PaymentAmountCalculators {
+  wechatpay?: AmountCalculator
+  alipay?: AmountCalculator
   regular: AmountCalculator
   stripe: AmountCalculator
   waffo: AmountCalculator
@@ -53,6 +60,8 @@ export interface PaymentAmountCalculators {
 }
 
 const defaultPaymentAmountCalculators: PaymentAmountCalculators = {
+  alipay: calculateAlipayAmount,
+  wechatpay: calculateWechatPayAmount,
   regular: calculateAmount,
   stripe: calculateStripeAmount,
   waffo: calculateWaffoAmount,
@@ -65,7 +74,11 @@ export async function requestPaymentAmount(
   calculators: PaymentAmountCalculators = defaultPaymentAmountCalculators
 ): Promise<number> {
   let calculator = calculators.regular
-  if (isStripePayment(paymentType)) {
+  if (paymentType === 'wechatpay_native') {
+    calculator = calculators.wechatpay || calculateWechatPayAmount
+  } else if (paymentType === 'alipay_direct') {
+    calculator = calculators.alipay || calculateAlipayAmount
+  } else if (isStripePayment(paymentType)) {
     calculator = calculators.stripe
   } else if (isWaffoPayment(paymentType)) {
     calculator = calculators.waffo
@@ -82,6 +95,8 @@ export async function requestPaymentAmount(
 }
 
 export function usePayment() {
+  const [wechatCheckout, setWechatCheckout] =
+    useState<WechatPayCheckout | null>(null)
   const [amount, setAmount] = useState<number>(0)
   const [calculating, setCalculating] = useState(false)
   const [processing, setProcessing] = useState(false)
@@ -123,15 +138,48 @@ export function usePayment() {
         setProcessing(true)
 
         const isStripe = isStripePayment(paymentType)
-        const amount = Math.floor(topupAmount)
+        const quotaAmount = Math.floor(topupAmount)
+        if (paymentType === 'wechatpay_native') {
+          const response = await requestWechatPayPayment(
+            quotaAmount,
+            amount.toFixed(2)
+          )
+          if (!isApiSuccess(response) || !response.data?.code_url) {
+            handleServerError(response, i18next.t('Payment request failed'))
+            return false
+          }
+          setWechatCheckout(response.data)
+          return true
+        }
+        if (paymentType === 'alipay_direct') {
+          const response = await requestAlipayPayment(
+            quotaAmount,
+            amount.toFixed(2)
+          )
+          if (!isApiSuccess(response) || !response.data?.pay_link) {
+            handleServerError(response, i18next.t('Payment request failed'))
+            return false
+          }
+          // Non-secret order reference; only the authenticated status API can confirm payment.
+          try {
+            sessionStorage.setItem(
+              'alipay-pending-order',
+              response.data.trade_no
+            )
+          } catch {
+            /* Storage may be unavailable in private browsing. */
+          }
+          window.location.assign(response.data.pay_link)
+          return true
+        }
 
         const response = isStripe
           ? await requestStripePayment({
-              amount,
+              amount: quotaAmount,
               payment_method: 'stripe',
             })
           : await requestPayment({
-              amount,
+              amount: quotaAmount,
               payment_method: paymentType,
             })
 
@@ -165,10 +213,12 @@ export function usePayment() {
         setProcessing(false)
       }
     },
-    []
+    [amount]
   )
 
   return {
+    wechatCheckout,
+    setWechatCheckout,
     amount,
     calculating,
     processing,

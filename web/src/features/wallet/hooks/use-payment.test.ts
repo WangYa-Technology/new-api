@@ -26,6 +26,10 @@ import { requestPaymentAmount, usePayment } from './use-payment'
 
 vi.mock('../api', () => ({
   calculateAmount: vi.fn(),
+  calculateAlipayAmount: vi.fn(),
+  calculateWechatPayAmount: vi.fn(),
+  requestWechatPayPayment: vi.fn(),
+  requestAlipayPayment: vi.fn(),
   calculateStripeAmount: vi.fn(),
   calculateWaffoAmount: vi.fn(),
   calculateWaffoPancakeAmount: vi.fn(),
@@ -39,6 +43,38 @@ afterEach(() => {
 })
 
 describe('payment amount routing', () => {
+  test('routes direct Alipay quotes independently of Epay', async () => {
+    const regular = vi.fn()
+    const alipay = vi.fn().mockResolvedValue({ success: true, data: '7.01' })
+    expect(
+      await requestPaymentAmount(1, PAYMENT_TYPES.ALIPAY_DIRECT, {
+        alipay,
+        regular,
+        stripe: regular,
+        waffo: regular,
+        waffoPancake: regular,
+      })
+    ).toBe(7.01)
+    expect(alipay).toHaveBeenCalledWith({ amount: 1 })
+    expect(regular).not.toHaveBeenCalled()
+  })
+
+  test('routes direct WeChat Pay quotes independently of Epay', async () => {
+    const regular = vi.fn()
+    const wechatpay = vi.fn().mockResolvedValue({ success: true, data: '7.01' })
+    expect(
+      await requestPaymentAmount(1, 'wechatpay_native', {
+        wechatpay,
+        regular,
+        stripe: regular,
+        waffo: regular,
+        waffoPancake: regular,
+      })
+    ).toBe(7.01)
+    expect(wechatpay).toHaveBeenCalledWith({ amount: 1 })
+    expect(regular).not.toHaveBeenCalled()
+  })
+
   test('uses the dedicated Waffo amount calculator', async () => {
     const calls: string[] = []
     const amount = await requestPaymentAmount(120, PAYMENT_TYPES.WAFFO, {

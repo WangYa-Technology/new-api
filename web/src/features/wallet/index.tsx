@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { Receipt } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -29,11 +30,13 @@ import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
 
+import { getAlipayOrderStatus } from './api'
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
+import { WechatPayDialog } from './components/dialogs/wechatpay-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { RedemptionCodeCard } from './components/redemption-code-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
@@ -70,6 +73,25 @@ interface WalletProps {
 
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
+  const [pendingAlipayOrder, setPendingAlipayOrder] = useState(() => {
+    try {
+      return sessionStorage.getItem('alipay-pending-order') || ''
+    } catch {
+      return ''
+    }
+  })
+  const alipayOrder = useQuery({
+    queryKey: ['alipay-order', pendingAlipayOrder],
+    enabled: !!pendingAlipayOrder,
+    queryFn: () => getAlipayOrderStatus(pendingAlipayOrder),
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.error ||
+      ['success', 'expired'].includes(query.state.data?.data?.status || '')
+        ? false
+        : 5000,
+  })
+
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
@@ -104,7 +126,11 @@ export function Wallet(props: WalletProps) {
   const subscriptionEpayMethods = useMemo(
     () =>
       (topupInfo?.pay_methods || []).filter(
-        (method) => method.type !== 'stripe' && method.type !== 'creem'
+        (method) =>
+          method.type !== 'stripe' &&
+          method.type !== 'creem' &&
+          method.type !== 'alipay_direct' &&
+          method.type !== 'wechatpay_native'
       ),
     [topupInfo?.pay_methods]
   )
@@ -116,6 +142,8 @@ export function Wallet(props: WalletProps) {
       : currency?.usdExchangeRate || 1
   }, [currency?.quotaDisplayType, currency?.usdExchangeRate])
   const {
+    wechatCheckout,
+    setWechatCheckout,
     amount: paymentAmount,
     calculating,
     processing,
@@ -160,6 +188,23 @@ export function Wallet(props: WalletProps) {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [props.initialShowHistory])
+
+  useEffect(() => {
+    const status = alipayOrder.data?.data?.status
+    if (!pendingAlipayOrder || !['success', 'expired'].includes(status || '')) {
+      return
+    }
+    try {
+      sessionStorage.removeItem('alipay-pending-order')
+    } catch {
+      /* Storage may be unavailable. */
+    }
+    setPendingAlipayOrder('')
+    if (status === 'success') {
+      void fetchUser()
+      setBillingDialogOpen(true)
+    }
+  }, [alipayOrder.data, pendingAlipayOrder, fetchUser])
 
   // Initialize topup amount when topup info is loaded
   const topupAmountInitializedRef = useRef(false)
@@ -225,12 +270,17 @@ export function Wallet(props: WalletProps) {
   const handlePaymentContinue = async () => {
     if (!selectedPaymentMethod) return
 
-    const minimum = Math.max(
+    let minimum = Math.max(
       selectedPaymentMethod.min_topup || 0,
       selectedPaymentMethod.type === PAYMENT_TYPES.WAFFO
         ? topupInfo?.waffo_min_topup || 0
         : getMinTopupAmount(topupInfo)
     )
+    if (
+      ['alipay_direct', 'wechatpay_native'].includes(selectedPaymentMethod.type)
+    ) {
+      minimum = selectedPaymentMethod.min_topup || 1
+    }
     if (topupAmount < minimum) return
 
     if (selectedPaymentMethod.type === PAYMENT_TYPES.WAFFO) {
@@ -320,6 +370,11 @@ export function Wallet(props: WalletProps) {
 
   return (
     <>
+      <WechatPayDialog
+        checkout={wechatCheckout}
+        onClose={() => setWechatCheckout(null)}
+        onPaid={fetchUser}
+      />
       <SectionPageLayout>
         <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>

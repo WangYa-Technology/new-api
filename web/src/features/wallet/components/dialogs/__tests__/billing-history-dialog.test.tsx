@@ -19,23 +19,41 @@ For commercial licensing, please contact support@quantumnous.com
 import { render, screen } from '@testing-library/react'
 import { describe, expect, test, vi } from 'vitest'
 
+import { useSystemConfigStore } from '@/stores/system-config-store'
+
 import { BillingHistoryDialog } from '../billing-history-dialog'
+
+const historyState = vi.hoisted(() => ({ alipay: false }))
 
 vi.mock('../../../hooks/use-billing-history', () => ({
   useBillingHistory: () => ({
-    records: [
-      {
-        id: 1,
-        user_id: 1,
-        amount: 0,
-        money: 30,
-        trade_no: 'SUBUSR1NOtest',
-        payment_method: 'test_card',
-        create_time: 1_788_426_953,
-        complete_time: 1_788_426_954,
-        status: 'success',
-      },
-    ],
+    records: historyState.alipay
+      ? [
+          {
+            id: 2,
+            user_id: 1,
+            amount: 0,
+            credited_quota: 71429,
+            money: 1,
+            trade_no: 'ALI-test',
+            payment_method: 'alipay_direct',
+            create_time: 1788426953,
+            status: 'success',
+          },
+        ]
+      : [
+          {
+            id: 1,
+            user_id: 1,
+            amount: 0,
+            money: 30,
+            trade_no: 'SUBUSR1NOtest',
+            payment_method: 'test_card',
+            create_time: 1_788_426_953,
+            complete_time: 1_788_426_954,
+            status: 'success',
+          },
+        ],
     total: 1,
     page: 1,
     pageSize: 10,
@@ -58,5 +76,29 @@ describe('billing history dialog', () => {
     expect(screen.getByText('Subscription')).toBeVisible()
     expect(screen.getByText('$30')).toBeVisible()
     expect(screen.queryByText('$0')).not.toBeInTheDocument()
+  })
+  test('shows a sub-dollar Alipay recharge as CNY credit rather than a subscription', () => {
+    const previous = useSystemConfigStore.getState().config
+    useSystemConfigStore.setState({
+      config: {
+        ...previous,
+        currency: {
+          ...previous.currency,
+          quotaDisplayType: 'CNY',
+          usdExchangeRate: 7,
+          quotaPerUnit: 500000,
+        },
+      },
+    })
+    historyState.alipay = true
+    try {
+      render(<BillingHistoryDialog open onOpenChange={vi.fn()} />)
+      expect(screen.getByText('¥1')).toBeInTheDocument()
+      expect(screen.getByText('CNY 1')).toBeInTheDocument()
+      expect(screen.queryByText('Subscription')).not.toBeInTheDocument()
+    } finally {
+      historyState.alipay = false
+      useSystemConfigStore.setState({ config: previous })
+    }
   })
 })

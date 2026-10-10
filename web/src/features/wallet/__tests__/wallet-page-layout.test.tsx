@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -110,7 +111,15 @@ describe('wallet page layout', () => {
   test('places order history in the page header and opens it on click', async () => {
     const user = userEvent.setup()
 
-    render(<Wallet />)
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <Wallet />
+      </QueryClientProvider>
+    )
 
     const heading = screen.getByRole('heading', { name: 'Wallet' })
     const pageHeader = heading.parentElement?.parentElement
@@ -132,7 +141,15 @@ describe('wallet page layout', () => {
   })
 
   test('places wallet promotion between balance stats and payment actions', () => {
-    render(<Wallet />)
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <Wallet />
+      </QueryClientProvider>
+    )
 
     const stats = screen.getByTestId('wallet-stats-card')
     const promotion = screen.getByTestId('wallet-promotion-banner')
@@ -147,7 +164,15 @@ describe('wallet page layout', () => {
   })
 
   test('places the subscription overview inside the wallet statistics grid', () => {
-    render(<Wallet />)
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <Wallet />
+      </QueryClientProvider>
+    )
 
     const walletHeader = screen.getByTestId('wallet-header')
     const walletStats = within(walletHeader).getByTestId('wallet-stats-card')

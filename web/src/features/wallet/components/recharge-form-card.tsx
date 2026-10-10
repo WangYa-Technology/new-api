@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TitledCard } from '@/components/ui/titled-card'
 import {
   formatBillingCurrencyFromUSD,
+  getCurrencyLabel,
   formatLocalCurrencyAmount,
 } from '@/lib/currency'
 import { cn } from '@/lib/utils'
@@ -37,6 +38,7 @@ import { cn } from '@/lib/utils'
 import { PAYMENT_TYPES } from '../constants'
 import {
   getDiscountPercentage,
+  formatDirectTopUpAmount,
   getPaymentIcon,
   getMinTopupAmount,
   calculatePresetPricing,
@@ -137,6 +139,8 @@ export function RechargeFormCard({
   }
 
   const hasConfigurableTopup =
+    topupInfo?.enable_wechatpay_topup ||
+    topupInfo?.enable_alipay_topup ||
     topupInfo?.enable_online_topup ||
     topupInfo?.enable_stripe_topup ||
     enableWaffoTopup ||
@@ -151,7 +155,7 @@ export function RechargeFormCard({
   const hasPaymentMethods =
     standardPaymentMethods.length > 0 ||
     (enableWaffoTopup && hasWaffoPaymentMethods && !!onWaffoMethodSelect)
-  const selectedMethodMinimum = selectedPaymentMethod
+  let selectedMethodMinimum = selectedPaymentMethod
     ? Math.max(
         selectedPaymentMethod.min_topup || 0,
         selectedPaymentMethod.type === PAYMENT_TYPES.WAFFO
@@ -159,6 +163,13 @@ export function RechargeFormCard({
           : minTopup
       )
     : minTopup
+  if (
+    ['alipay_direct', 'wechatpay_native'].includes(
+      selectedPaymentMethod?.type || ''
+    )
+  ) {
+    selectedMethodMinimum = selectedPaymentMethod?.min_topup || 1
+  }
   const hasSelectedPaymentMethod =
     !!selectedPaymentMethod &&
     (selectedPaymentMethod.type !== PAYMENT_TYPES.WAFFO ||
@@ -326,7 +337,11 @@ export function RechargeFormCard({
                             method.icon,
                             method.name
                           )}
-                          <span className='truncate'>{method.name}</span>
+                          <span className='truncate'>
+                            {method.type === 'alipay_direct'
+                              ? t('Alipay')
+                              : t(method.name)}
+                          </span>
                         </Button>
                       )
                     })}
@@ -420,7 +435,11 @@ export function RechargeFormCard({
                         >
                           <div className='flex w-full min-w-0 items-center justify-between gap-2'>
                             <div className='min-w-0 truncate text-base font-semibold sm:text-lg'>
-                              {formatBillingCurrencyFromUSD(preset.value)}
+                              {['alipay_direct', 'wechatpay_native'].includes(
+                                selectedPaymentMethod?.type || ''
+                              )
+                                ? formatDirectTopUpAmount(preset.value)
+                                : formatBillingCurrencyFromUSD(preset.value)}
                             </div>
                             {hasDiscount && (
                               <Badge
@@ -433,21 +452,26 @@ export function RechargeFormCard({
                               </Badge>
                             )}
                           </div>
-                          <div className='mt-1.5 flex w-full min-w-0 items-baseline gap-2 text-xs sm:mt-2'>
-                            <span className='min-w-0 truncate font-medium'>
-                              {t('Pay {{amount}}', {
-                                amount: formatLocalCurrencyAmount(actualPrice),
-                              })}
-                            </span>
-                            {hasDiscount && (
-                              <span
-                                aria-hidden='true'
-                                className='text-muted-foreground shrink-0 line-through'
-                              >
-                                {formatLocalCurrencyAmount(originalPrice)}
+                          {!['alipay_direct', 'wechatpay_native'].includes(
+                            selectedPaymentMethod?.type || ''
+                          ) && (
+                            <div className='mt-1.5 flex w-full min-w-0 items-baseline gap-2 text-xs sm:mt-2'>
+                              <span className='min-w-0 truncate font-medium'>
+                                {t('Pay {{amount}}', {
+                                  amount:
+                                    formatLocalCurrencyAmount(actualPrice),
+                                })}
                               </span>
-                            )}
-                          </div>
+                              {hasDiscount && (
+                                <span
+                                  aria-hidden='true'
+                                  className='text-muted-foreground shrink-0 line-through'
+                                >
+                                  {formatLocalCurrencyAmount(originalPrice)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </Button>
                       )
                     })}
@@ -461,6 +485,9 @@ export function RechargeFormCard({
                   className='text-muted-foreground text-xs font-medium tracking-wider uppercase'
                 >
                   {t('Custom Amount')}
+                  {['alipay_direct', 'wechatpay_native'].includes(
+                    selectedPaymentMethod?.type || ''
+                  ) && ` (${getCurrencyLabel()})`}
                 </Label>
                 <div className='grid grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
                   <Input
@@ -468,9 +495,9 @@ export function RechargeFormCard({
                     type='number'
                     value={localAmount}
                     onChange={(e) => handleAmountChange(e.target.value)}
-                    min={minTopup}
+                    min={selectedMethodMinimum}
                     placeholder={t('Minimum {{amount}}', {
-                      amount: minTopup,
+                      amount: selectedMethodMinimum,
                     })}
                     className='h-9 text-base sm:h-10 sm:text-lg'
                   />
@@ -482,7 +509,11 @@ export function RechargeFormCard({
                       <Skeleton className='h-5 w-16' />
                     ) : (
                       <span className='text-sm font-semibold'>
-                        {formatLocalCurrencyAmount(paymentAmount)}
+                        {['alipay_direct', 'wechatpay_native'].includes(
+                          selectedPaymentMethod?.type || ''
+                        )
+                          ? `CNY ${formatLocalCurrencyAmount(paymentAmount, { showSymbol: false, digitsLarge: 2, digitsSmall: 2, abbreviate: false })}`
+                          : formatLocalCurrencyAmount(paymentAmount)}
                       </span>
                     )}
                   </div>

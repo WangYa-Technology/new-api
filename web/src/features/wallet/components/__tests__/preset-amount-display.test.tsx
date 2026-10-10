@@ -21,6 +21,7 @@ import i18next from 'i18next'
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 
 import zh from '@/i18n/locales/zh.json'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import type { TopupInfo } from '../../types'
 import { RechargeFormCard } from '../recharge-form-card'
@@ -120,4 +121,55 @@ describe('preset amount display', () => {
       'ring-primary/20'
     )
   })
+  test.each(['alipay_direct', 'wechatpay_native'])(
+    '%s CNY presets show the entered yuan amount without multiplying by the exchange rate',
+    (paymentType) => {
+      const previous = useSystemConfigStore.getState().config
+      useSystemConfigStore.setState({
+        config: {
+          ...previous,
+          currency: {
+            ...previous.currency,
+            quotaDisplayType: 'CNY',
+            usdExchangeRate: 7,
+          },
+        },
+      })
+      try {
+        render(
+          <RechargeFormCard
+            topupInfo={{ ...topupInfo, min_topup: 200 }}
+            presetAmounts={[{ value: 100, discount: 0.9 }]}
+            selectedPreset={100}
+            onSelectPreset={vi.fn()}
+            topupAmount={100}
+            onTopupAmountChange={vi.fn()}
+            paymentAmount={90}
+            calculating={false}
+            onPaymentMethodSelect={vi.fn()}
+            onPaymentContinue={vi.fn()}
+            selectedPaymentMethod={{
+              type: paymentType,
+              min_topup: 1,
+              name: 'Alipay Direct',
+            }}
+            redemptionCode=''
+            onRedemptionCodeChange={vi.fn()}
+            onRedeem={vi.fn()}
+            redeeming={false}
+          />
+        )
+        expect(
+          screen.getByRole('button', { name: /^¥100/ })
+        ).toBeInTheDocument()
+        expect(
+          screen.queryByRole('button', { name: /^¥700/ })
+        ).not.toBeInTheDocument()
+        expect(screen.getByText('CNY 90')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: '继续' })).toBeEnabled()
+      } finally {
+        useSystemConfigStore.setState({ config: previous })
+      }
+    }
+  )
 })

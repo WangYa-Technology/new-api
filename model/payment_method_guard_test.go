@@ -398,3 +398,42 @@ func TestRechargeEpayEnforcesFinalWalletQuotaLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestAlipayCacheRetryPreservesReservations(t *testing.T) {
+	server := useUserCacheMiniRedis(t)
+	require.NoError(t, DB.AutoMigrate(&AlipayOrder{}, &WechatPayOrder{}))
+	const userID = 98001
+	snapshot := &UserBase{Id: userID, AuthVersion: 1, Quota: 1000}
+	require.NoError(t, writeUserCache(snapshot, true))
+	// A relay reserves quota before the payment's cache delivery.
+	require.NoError(t, common.RDB.HIncrBy(t.Context(), getUserCacheKey(userID), "Quota", -200).Err())
+	order := &AlipayOrder{UserID: userID, CreditSequence: 500, Status: common.TopUpStatusSuccess}
+	require.NoError(t, SyncAlipayQuotaCache(order))
+	require.NoError(t, SyncAlipayQuotaCache(order))
+	assert.Equal(t, "1300", server.HGet(getUserCacheKey(userID), "Quota"))
+	order.CreditSequence = 300
+	require.NoError(t, SyncAlipayQuotaCache(order))
+	assert.Equal(t, "1300", server.HGet(getUserCacheKey(userID), "Quota"))
+	// Hydration from an earlier DB snapshot includes credits already delivered.
+	server.Del(getUserCacheKey(userID))
+	require.NoError(t, writeUserCache(snapshot, true))
+	assert.Equal(t, "1500", server.HGet(getUserCacheKey(userID), "Quota"))
+	order.CreditSequence = 500
+	require.NoError(t, SyncAlipayQuotaCache(order))
+	assert.Equal(t, "1500", server.HGet(getUserCacheKey(userID), "Quota"))
+	// A post-commit snapshot must not credit the payment a second time.
+	server.Del(getUserCacheKey(userID))
+	snapshot.Quota = 1500
+	snapshot.AlipayCredit = 500
+	require.NoError(t, writeUserCache(snapshot, true))
+	require.NoError(t, SyncAlipayQuotaCache(order))
+	assert.Equal(t, "1500", server.HGet(getUserCacheKey(userID), "Quota"))
+	// Interleaved WeChat delivery uses the same watermark without losing relay reservations.
+	require.NoError(t, common.RDB.HIncrBy(t.Context(), getUserCacheKey(userID), "Quota", -100).Err())
+	wx := &WechatPayOrder{UserID: userID, CreditSequence: 700, Status: common.TopUpStatusSuccess}
+	require.NoError(t, SyncWechatPayQuotaCache(wx))
+	require.NoError(t, SyncAlipayQuotaCache(order))
+	require.NoError(t, SyncWechatPayQuotaCache(wx))
+	assert.Equal(t, "1600", server.HGet(getUserCacheKey(userID), "Quota"))
+
+}

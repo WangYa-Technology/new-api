@@ -24,6 +24,8 @@ import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { formatDirectTopUpAmount } from '@/features/wallet/lib/format'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { safeJsonParseWithValidation } from '../utils/json-parser'
 import { isArray } from '../utils/json-validators'
@@ -38,6 +40,7 @@ export function AmountOptionsVisualEditor({
   onChange,
 }: AmountOptionsVisualEditorProps) {
   const { t } = useTranslation()
+  useSystemConfigStore((state) => state.config.currency)
   const [newAmount, setNewAmount] = useState('')
 
   const amounts = useMemo(() => {
@@ -112,7 +115,9 @@ export function AmountOptionsVisualEditor({
                 className='text-base'
                 copyable={false}
               >
-                <span className='font-mono'>${amount}</span>
+                <span className='font-mono'>
+                  {formatDirectTopUpAmount(amount)}
+                </span>
                 <Button
                   type='button'
                   variant='ghost'
@@ -123,7 +128,7 @@ export function AmountOptionsVisualEditor({
                     handleRemove(amount)
                   }}
                   className='hover:bg-muted-foreground/20 size-auto p-0.5'
-                  aria-label={t('Remove ${{amount}}', { amount })}
+                  aria-label={`${t('Remove')} ${formatDirectTopUpAmount(amount)}`}
                 >
                   <X className='h-3.5 w-3.5' />
                 </Button>
