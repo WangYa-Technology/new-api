@@ -22,6 +22,16 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 export type OrderScope = 'site' | 'personal'
 
 export interface SiteOrder {
+  review_resolution?: string
+  review_version?: string
+  reviews?: {
+    action?: string
+    reference?: string
+    id: number
+    actor_id: number
+    note: string
+    created_at: number
+  }[]
   id: number
   order_type?: 'topup' | 'subscription'
   currency?: string
@@ -47,6 +57,8 @@ export interface SiteOrder {
   next_check_at?: number
   retry_count?: number
   review_required?: boolean
+  cancellation_state?: string
+  cancellation_code?: string
   cancel_requested?: boolean
   sandbox: boolean
   cache_pending?: boolean
@@ -107,14 +119,30 @@ export async function recoverOrder(id: number, reason: string) {
   return requireServerSuccess(response.data).data
 }
 
+export async function recordOrderReview(
+  id: number,
+  note: string,
+  resolution?: { action: string; reference: string; version: string }
+) {
+  const response = await api.post(`/api/user/orders/${id}/review`, {
+    note,
+    ...resolution,
+  })
+  requireServerSuccess(response.data)
+  return { result: 'review_recorded' }
+}
+
 export interface DirectOrderCheckout {
-  payment_provider: 'alipay' | 'wechatpay'
+  payment_provider: 'alipay' | 'wechatpay' | 'mixpay' | 'webmoney' | 'antom'
   trade_no: string
   amount: string
-  currency: 'CNY'
+  currency: 'CNY' | 'USD' | 'WMT'
   expires_at: number
+  pay_params?: Record<string, string>
   pay_link?: string
   code_url?: string
+  status?: string
+  review_required?: boolean
 }
 
 export async function resumeOrder(id: number) {
@@ -127,20 +155,25 @@ export async function resumeOrder(id: number) {
   return requireServerSuccess(response.data).data
 }
 
-export async function cancelOrder(id: number) {
+export async function cancelOrder(id: number, scope: OrderScope = 'personal') {
   const response = await api.post<{
     success: boolean
     data: { status: 'closed' | 'closing' | 'paid' }
-  }>(`/api/user/self/orders/${id}/cancel`, {})
+  }>(
+    `${scope === 'personal' ? '/api/user/self/orders' : '/api/user/orders'}/${id}/cancel`,
+    {}
+  )
   return requireServerSuccess(response.data).data
 }
 
 export async function getPendingDirectOrders() {
   const lists = await Promise.all(
-    ['alipay', 'wechatpay'].map((provider) =>
+    ['alipay', 'wechatpay', 'mixpay', 'webmoney', 'antom'].map((provider) =>
       getOrders(
         {
-          actionable: true,
+          // MixPay pending orders still need attention while under review or
+          // awaiting a final result after expiry. Visibility is not payability.
+          actionable: provider !== 'mixpay',
           keyword: '',
           user: '',
           provider,
@@ -160,4 +193,12 @@ export async function getPendingDirectOrders() {
       .flatMap((list) => list.items)
       .sort((a, b) => b.create_time - a.create_time)[0],
   }
+}
+
+export async function recheckPersonalOrder(id: number) {
+  const response = await api.post<{
+    success: boolean
+    data: { status: string }
+  }>(`/api/user/self/orders/${id}/recheck`, {})
+  return requireServerSuccess(response.data).data
 }

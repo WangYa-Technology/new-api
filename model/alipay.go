@@ -118,6 +118,25 @@ func RecordAlipayPayment(tradeNo, providerTradeNo string, amountFen int64) error
 	})
 }
 
+// HoldAlipayRefund records verified refund evidence, including partial refunds
+// whose trade status can still be TRADE_SUCCESS. Never reverse wallet history.
+func HoldAlipayRefund(tradeNo, transaction string, amountFen, refundFen int64) error {
+	if transaction == "" || len(transaction) > 64 || refundFen <= 0 || refundFen > amountFen {
+		return errors.New("invalid Alipay refund")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var order AlipayOrder
+		if err := lockForUpdate(tx).Where("trade_no = ?", tradeNo).First(&order).Error; err != nil {
+			return err
+		}
+		if order.AmountFen != amountFen || (order.ProviderTradeNo != nil && *order.ProviderTradeNo != transaction) {
+			return errors.New("Alipay refund identity mismatch")
+		}
+		return tx.Model(&order).Updates(map[string]any{"review_required": true, "gateway_status": "REFUNDED", "checked_at": common.GetTimestamp(), "next_check_at": 0, "last_error": "manual_review_required"}).Error
+	})
+
+}
+
 // A cumulative credit watermark makes retries and out-of-order delivery safe.
 // The separate watermark also corrects cache hydration from a pre-commit user snapshot.
 func SyncAlipayQuotaCache(order *AlipayOrder) error {
@@ -223,7 +242,7 @@ func PopulateAlipayTopUpQuotas(topups []*TopUp) error {
 	return nil
 }
 
-// Both direct payment providers share the existing cumulative AlipayCredit watermark.
+// Direct payments and MixPay share the existing cumulative AlipayCredit watermark.
 // Keeping the persisted/cache names preserves compatibility with existing balances.
 func syncDirectPaymentQuotaCache(userID int, creditSequence int64) error {
 	if common.RedisEnabled {

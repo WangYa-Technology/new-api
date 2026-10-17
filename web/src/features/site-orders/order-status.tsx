@@ -21,22 +21,47 @@ import { useTranslation } from 'react-i18next'
 import { StatusBadge } from '@/components/status-badge'
 
 import type { SiteOrder } from './api'
+import { reviewResolutionLabel } from './presentation'
 
-export function OrderStatus(props: { order: SiteOrder }) {
+export function OrderStatus(props: {
+  order: Pick<SiteOrder, 'order_status'> &
+    Partial<
+      Pick<
+        SiteOrder,
+        | 'close_reason'
+        | 'payment_provider'
+        | 'cancel_requested'
+        | 'close_requested_at'
+        | 'cancellation_state'
+        | 'review_resolution'
+        | 'cache_pending'
+        | 'review_required'
+        | 'last_error'
+      >
+    >
+}) {
   const { t } = useTranslation()
   const labels: Record<string, string> = {
     pending: t('Awaiting payment'),
     paid: t('Paid, awaiting credit'),
     paid_review: t('Paid, awaiting manual review'),
+    review_closed: t('Review resolved'),
     success: t('Completed'),
-    expired: t('Closed'),
+    expired:
+      props.order.close_reason === 'local_expiry' ||
+      props.order.payment_provider === 'webmoney'
+        ? t('Expired')
+        : t('Closed'),
     failed: t('Failed'),
   }
   if (
     props.order.order_status === 'pending' &&
     (props.order.cancel_requested || props.order.close_requested_at)
   ) {
-    labels.pending = t('Closing order')
+    labels.pending =
+      props.order.cancellation_state === 'rejected'
+        ? t('Cancellation rejected')
+        : t('Closing order')
   }
   let variant: 'success' | 'warning' | 'danger' = 'warning'
   if (props.order.order_status === 'success') variant = 'success'
@@ -44,7 +69,12 @@ export function OrderStatus(props: { order: SiteOrder }) {
   return (
     <div className='flex flex-wrap gap-1'>
       <StatusBadge
-        label={labels[props.order.order_status] ?? props.order.order_status}
+        label={
+          props.order.review_resolution &&
+          props.order.order_status !== 'success'
+            ? reviewResolutionLabel(props.order.review_resolution, t)
+            : (labels[props.order.order_status] ?? props.order.order_status)
+        }
         variant={variant}
         copyable={false}
       />
@@ -55,13 +85,24 @@ export function OrderStatus(props: { order: SiteOrder }) {
           copyable={false}
         />
       )}
-      {(props.order.last_error || props.order.review_required) && (
-        <StatusBadge
-          label={t('Payment requires attention')}
-          variant='danger'
-          copyable={false}
-        />
-      )}
+      {props.order.review_resolution &&
+        props.order.order_status === 'success' && (
+          <StatusBadge
+            label={reviewResolutionLabel(props.order.review_resolution, t)}
+            variant='success'
+            copyable={false}
+          />
+        )}
+      {!props.order.review_resolution &&
+        (props.order.review_required ||
+          (props.order.payment_provider !== 'mixpay' &&
+            props.order.last_error)) && (
+          <StatusBadge
+            label={t('Payment requires attention')}
+            variant='danger'
+            copyable={false}
+          />
+        )}
     </div>
   )
 }

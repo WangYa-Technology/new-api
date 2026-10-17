@@ -52,6 +52,9 @@ import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
+import { Route as PaymentWebmoneyTradeNoRouteImport } from './routes/payment/webmoney/$tradeNo'
+import { Route as PaymentMixpayTradeNoRouteImport } from './routes/payment/mixpay/$tradeNo'
+import { Route as PaymentAntomTradeNoRouteImport } from './routes/payment/antom/$tradeNo'
 import { Route as AuthenticatedUsageLogsAuditRouteImport } from './routes/_authenticated/usage-logs/audit'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
@@ -306,6 +309,21 @@ const AuthenticatedChannelsIndexRoute =
     path: '/channels/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const PaymentWebmoneyTradeNoRoute = PaymentWebmoneyTradeNoRouteImport.update({
+  id: '/payment/webmoney/$tradeNo',
+  path: '/payment/webmoney/$tradeNo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentMixpayTradeNoRoute = PaymentMixpayTradeNoRouteImport.update({
+  id: '/payment/mixpay/$tradeNo',
+  path: '/payment/mixpay/$tradeNo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentAntomTradeNoRoute = PaymentAntomTradeNoRouteImport.update({
+  id: '/payment/antom/$tradeNo',
+  path: '/payment/antom/$tradeNo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedUsageLogsAuditRoute =
   AuthenticatedUsageLogsAuditRouteImport.update({
     id: '/usage-logs/audit',
@@ -473,6 +491,9 @@ export interface FileRoutesByFullPath {
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
+  '/payment/antom/$tradeNo': typeof PaymentAntomTradeNoRoute
+  '/payment/mixpay/$tradeNo': typeof PaymentMixpayTradeNoRoute
+  '/payment/webmoney/$tradeNo': typeof PaymentWebmoneyTradeNoRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
@@ -538,6 +559,9 @@ export interface FileRoutesByTo {
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
+  '/payment/antom/$tradeNo': typeof PaymentAntomTradeNoRoute
+  '/payment/mixpay/$tradeNo': typeof PaymentMixpayTradeNoRoute
+  '/payment/webmoney/$tradeNo': typeof PaymentWebmoneyTradeNoRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
@@ -607,6 +631,9 @@ export interface FileRoutesById {
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
+  '/payment/antom/$tradeNo': typeof PaymentAntomTradeNoRoute
+  '/payment/mixpay/$tradeNo': typeof PaymentMixpayTradeNoRoute
+  '/payment/webmoney/$tradeNo': typeof PaymentWebmoneyTradeNoRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
@@ -675,6 +702,9 @@ export interface FileRouteTypes {
     | '/models/$section'
     | '/usage-logs/$section'
     | '/usage-logs/audit'
+    | '/payment/antom/$tradeNo'
+    | '/payment/mixpay/$tradeNo'
+    | '/payment/webmoney/$tradeNo'
     | '/channels/'
     | '/dashboard/'
     | '/keys/'
@@ -740,6 +770,9 @@ export interface FileRouteTypes {
     | '/models/$section'
     | '/usage-logs/$section'
     | '/usage-logs/audit'
+    | '/payment/antom/$tradeNo'
+    | '/payment/mixpay/$tradeNo'
+    | '/payment/webmoney/$tradeNo'
     | '/channels'
     | '/dashboard'
     | '/keys'
@@ -808,6 +841,9 @@ export interface FileRouteTypes {
     | '/_authenticated/models/$section'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/usage-logs/audit'
+    | '/payment/antom/$tradeNo'
+    | '/payment/mixpay/$tradeNo'
+    | '/payment/webmoney/$tradeNo'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
     | '/_authenticated/keys/'
@@ -861,6 +897,9 @@ export interface RootRouteChildren {
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
+  PaymentAntomTradeNoRoute: typeof PaymentAntomTradeNoRoute
+  PaymentMixpayTradeNoRoute: typeof PaymentMixpayTradeNoRoute
+  PaymentWebmoneyTradeNoRoute: typeof PaymentWebmoneyTradeNoRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
 }
 
@@ -1166,6 +1205,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/channels/'
       preLoaderRoute: typeof AuthenticatedChannelsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/payment/webmoney/$tradeNo': {
+      id: '/payment/webmoney/$tradeNo'
+      path: '/payment/webmoney/$tradeNo'
+      fullPath: '/payment/webmoney/$tradeNo'
+      preLoaderRoute: typeof PaymentWebmoneyTradeNoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payment/mixpay/$tradeNo': {
+      id: '/payment/mixpay/$tradeNo'
+      path: '/payment/mixpay/$tradeNo'
+      fullPath: '/payment/mixpay/$tradeNo'
+      preLoaderRoute: typeof PaymentMixpayTradeNoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payment/antom/$tradeNo': {
+      id: '/payment/antom/$tradeNo'
+      path: '/payment/antom/$tradeNo'
+      fullPath: '/payment/antom/$tradeNo'
+      preLoaderRoute: typeof PaymentAntomTradeNoRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/usage-logs/audit': {
       id: '/_authenticated/usage-logs/audit'
@@ -1497,6 +1557,9 @@ const rootRouteChildren: RootRouteChildren = {
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
+  PaymentAntomTradeNoRoute: PaymentAntomTradeNoRoute,
+  PaymentMixpayTradeNoRoute: PaymentMixpayTradeNoRoute,
+  PaymentWebmoneyTradeNoRoute: PaymentWebmoneyTradeNoRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
 }
 export const routeTree = rootRouteImport

@@ -18,6 +18,10 @@ import (
 // instances and each run is recorded as one task row. Call this before
 // service.StartSystemTaskRunner.
 func RegisterScheduledSystemTasks() {
+	service.RegisterSystemTaskHandler(paymentAuditHandler{})
+	service.RegisterSystemTaskHandler(mixpayReconcileHandler{})
+	service.RegisterSystemTaskHandler(webmoneyReconcileHandler{})
+	service.RegisterSystemTaskHandler(antomReconcileHandler{})
 	service.RegisterSystemTaskHandler(alipayReconcileHandler{})
 	service.RegisterSystemTaskHandler(wechatpayReconcileHandler{})
 	service.RegisterSystemTaskHandler(channelTestHandler{})
@@ -198,4 +202,74 @@ func (wechatpayReconcileHandler) Run(ctx context.Context, task *model.SystemTask
 		return
 	}
 	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, nil, nil)
+}
+
+type mixpayReconcileHandler struct{}
+
+func (mixpayReconcileHandler) Type() string { return "mixpay_reconcile" }
+func (mixpayReconcileHandler) Enabled() bool {
+	var count int64
+	return model.DB.Model(&model.MixPayOrder{}).Where("next_check_at > 0").Limit(1).Count(&count).Error == nil && count > 0
+}
+func (mixpayReconcileHandler) Interval() time.Duration { return 2 * time.Second }
+func (mixpayReconcileHandler) NewPayload() any         { return nil }
+func (mixpayReconcileHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	err := service.RunMixPayReconciliation(ctx)
+	status := model.SystemTaskStatusSucceeded
+	if err != nil {
+		status = model.SystemTaskStatusFailed
+	}
+	finishSystemTaskHandler(task, runnerID, status, nil, err)
+}
+
+type webmoneyReconcileHandler struct{}
+
+func (webmoneyReconcileHandler) Type() string { return "webmoney_reconcile" }
+func (webmoneyReconcileHandler) Enabled() bool {
+	var count int64
+	return model.WebMoneyOrdersRequiringReconciliation(model.DB, common.GetTimestamp()).Limit(1).Count(&count).Error == nil && count > 0
+}
+func (webmoneyReconcileHandler) Interval() time.Duration { return 30 * time.Second }
+func (webmoneyReconcileHandler) NewPayload() any         { return nil }
+func (webmoneyReconcileHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	err := service.RunWebMoneyReconciliation(ctx)
+	status := model.SystemTaskStatusSucceeded
+	if err != nil {
+		status = model.SystemTaskStatusFailed
+	}
+	finishSystemTaskHandler(task, runnerID, status, nil, err)
+}
+
+type antomReconcileHandler struct{}
+
+func (antomReconcileHandler) Type() string { return "antom_reconcile" }
+func (antomReconcileHandler) Enabled() bool {
+	var count int64
+	return model.AntomOrdersRequiringReconciliation(model.DB).Limit(1).Count(&count).Error == nil && count > 0
+}
+func (antomReconcileHandler) Interval() time.Duration { return 30 * time.Second }
+func (antomReconcileHandler) NewPayload() any         { return nil }
+func (antomReconcileHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	err := service.RunAntomReconciliation(ctx)
+	status := model.SystemTaskStatusSucceeded
+	if err != nil {
+		status = model.SystemTaskStatusFailed
+	}
+	finishSystemTaskHandler(task, runnerID, status, nil, err)
+}
+
+// Financial audits use a separate cadence from unpaid-order reconciliation.
+type paymentAuditHandler struct{}
+
+func (paymentAuditHandler) Type() string            { return "payment_audit" }
+func (paymentAuditHandler) Enabled() bool           { return service.HasDuePaymentAudit() }
+func (paymentAuditHandler) Interval() time.Duration { return time.Minute }
+func (paymentAuditHandler) NewPayload() any         { return nil }
+func (paymentAuditHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	err := service.RunPaymentAudit(ctx)
+	status := model.SystemTaskStatusSucceeded
+	if err != nil {
+		status = model.SystemTaskStatusFailed
+	}
+	finishSystemTaskHandler(task, runnerID, status, nil, err)
 }

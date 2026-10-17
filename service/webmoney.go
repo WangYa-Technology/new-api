@@ -1,0 +1,384 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/xml"
+	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/shopspring/decimal"
+)
+
+var webMoneyWMID = regexp.MustCompile(`^[0-9]{12}$`)
+
+var webMoneyPurse = regexp.MustCompile(`^T[0-9]{12}$`)
+var webMoneyNumber = regexp.MustCompile(`^[0-9]{1,15}$`)
+var webMoneyRate = regexp.MustCompile(`^[0-9]{1,7}(\.[0-9]{1,6})?$`)
+var webMoneyAmount = regexp.MustCompile(`^[0-9]{1,9}(\.[0-9]{1,2})?$`)
+
+func ValidateWebMoneyConfig(c *model.WebMoneyConfig) error {
+	if c.WMID != "" && !webMoneyWMID.MatchString(c.WMID) {
+		return errors.New("WebMoney WMID must contain 12 digits")
+	}
+	if !webMoneyRate.MatchString(c.Rate) {
+		return errors.New("invalid WMT/USD rate")
+	}
+	rate, err := decimal.NewFromString(c.Rate)
+	if len(c.Rate) > 24 || err != nil || !rate.IsPositive() || rate.GreaterThan(decimal.NewFromInt(1000000)) || rate.Exponent() < -6 {
+		return errors.New("invalid WMT/USD rate")
+	}
+	c.Rate = rate.String()
+	if c.MinTopUp < 1 || c.MinTopUp > 1000000 {
+		return errors.New("invalid minimum topup")
+	}
+	if !c.Enabled && c.Purse == "" {
+		return nil
+	}
+	if !webMoneyPurse.MatchString(c.Purse) || utf8.RuneCountInString(c.Description) < 1 || utf8.RuneCountInString(c.Description) > 255 {
+		return errors.New("invalid WebMoney purse or description")
+	}
+	if len(c.Secret) < 16 || len(c.Secret) > 50 || strings.ContainsAny(c.Secret, ";\r\n") {
+		return errors.New("WebMoney Secret Key must contain 16 to 50 characters without semicolons or line breaks")
+	}
+	for _, raw := range []string{c.NotifyBaseURL, c.ReturnURL} {
+		u, e := url.Parse(raw)
+		if e != nil || len(raw) > 450 || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Fragment != "" || u.RawQuery != "" {
+			return errors.New("WebMoney requires public HTTPS notification and return URLs without query parameters")
+		}
+	}
+	c.NotifyBaseURL = strings.TrimRight(c.NotifyBaseURL, "/")
+	return nil
+}
+func QuoteWebMoney(c *model.WebMoneyConfig, amount int64, group string) (string, int, error) {
+	value, quota, _, err := QuoteWebMoneyOrder(c, amount, group, 0)
+	return value, quota, err
+}
+func QuoteWebMoneyOrder(c *model.WebMoneyConfig, amount int64, group string, planID int) (string, int, *model.SubscriptionPlan, error) {
+	// Reuse site-currency conversion, discounts and wallet capacity bounds.
+	usd, quota, plan, err := QuoteMixPay(&model.MixPayConfig{MinTopUp: c.MinTopUp}, amount, group, planID)
+	if err != nil {
+		return "", 0, nil, err
+	}
+	if !webMoneyRate.MatchString(c.Rate) {
+		return "", 0, nil, errors.New("invalid WMT/USD rate")
+	}
+	rate, e := decimal.NewFromString(c.Rate)
+	if e != nil || !rate.IsPositive() {
+		return "", 0, nil, errors.New("invalid WebMoney exchange rate")
+	}
+	money, _ := decimal.NewFromString(usd)
+	money = money.Mul(rate).Round(2)
+	if !money.IsPositive() || money.GreaterThan(decimal.NewFromInt(1000000)) {
+		return "", 0, nil, errors.New("WebMoney amount outside supported range")
+	}
+	return money.StringFixed(2), quota, plan, nil
+}
+func WebMoneyCheckout(o *model.WebMoneyOrder, c *model.WebMoneyConfig) map[string]any {
+	data := map[string]any{"payment_provider": "webmoney", "trade_no": o.TradeNo, "amount": o.Amount, "currency": "WMT", "expires_at": o.ExpiresAt, "status": o.Status, "pay_link": "", "review_required": o.ReviewRequired || model.DirectSubscriptionReviewRequired(o.TradeNo), "creation_state": "ready", "gateway_status": o.GatewayStatus, "closure_confirmed": false}
+	if !o.ReviewRequired && o.Status == "pending" && o.ExpiresAt > common.GetTimestamp() {
+		returnURL, err := url.Parse(c.ReturnURL)
+		if err != nil || returnURL.Scheme != "https" || returnURL.Host == "" {
+			return data
+		}
+		returnURL.Path = "/payment/webmoney/" + o.TradeNo
+		returnURL.RawPath, returnURL.RawQuery, returnURL.Fragment = "", "", ""
+		data["pay_link"] = "https://merchant.wmtransfer.com/lmi/payment_utf.asp"
+		data["pay_params"] = map[string]string{"LMI_PAYEE_PURSE": c.Purse, "LMI_PAYMENT_AMOUNT": o.Amount, "LMI_PAYMENT_NO": strconv.FormatInt(o.ID, 10), "LMI_PAYMENT_DESC_BASE64": base64.StdEncoding.EncodeToString([]byte(c.Description)), "LMI_SUCCESS_URL": returnURL.String(), "LMI_FAIL_URL": returnURL.String(), "LMI_SUCCESS_METHOD": "0", "LMI_FAIL_METHOD": "0"}
+	}
+	return data
+}
+func ValidateWebMoneyPayment(o *model.WebMoneyOrder, c *model.WebMoneyConfig, v url.Values) error {
+	for key, values := range v {
+		if strings.HasPrefix(key, "LMI_") && len(values) != 1 {
+			return errors.New("duplicate WebMoney field")
+		}
+	}
+	if v.Get("LMI_PAYEE_PURSE") != c.Purse || v.Get("LMI_PAYMENT_NO") != strconv.FormatInt(o.ID, 10) || !webMoneyAmount.MatchString(v.Get("LMI_PAYMENT_AMOUNT")) {
+		return errors.New("WebMoney identity mismatch")
+	}
+	amount, err := decimal.NewFromString(v.Get("LMI_PAYMENT_AMOUNT"))
+	expected, e := decimal.NewFromString(o.Amount)
+	if err != nil || e != nil || !amount.Equal(expected) {
+		return errors.New("WebMoney amount mismatch")
+	}
+	if v.Get("LMI_MODE") != "0" || v.Get("LMI_HOLD") != "" {
+		return errors.New("WebMoney test or held payment rejected")
+	}
+	return nil
+}
+func VerifyWebMoneyNotification(o *model.WebMoneyOrder, c *model.WebMoneyConfig, v url.Values) error {
+	if err := ValidateWebMoneyPayment(o, c, v); err != nil {
+		return err
+	}
+	if v.Get("LMI_PREREQUEST") != "" && v.Get("LMI_PREREQUEST") != "0" {
+		return errors.New("not a payment notification")
+	}
+	for _, field := range []string{"LMI_SYS_INVS_NO", "LMI_SYS_TRANS_NO", "LMI_PAYER_WM"} {
+		if !webMoneyNumber.MatchString(v.Get(field)) {
+			return errors.New("invalid WebMoney transaction")
+		}
+	}
+	if len(v.Get("LMI_SYS_TRANS_DATE")) != 17 || len(v.Get("LMI_PAYER_PURSE")) != 13 {
+		return errors.New("invalid WebMoney receipt")
+	}
+	parts := []string{c.Purse, v.Get("LMI_PAYMENT_AMOUNT"), v.Get("LMI_PAYMENT_NO"), v.Get("LMI_MODE"), v.Get("LMI_SYS_INVS_NO"), v.Get("LMI_SYS_TRANS_NO"), v.Get("LMI_SYS_TRANS_DATE"), c.Secret, v.Get("LMI_PAYER_PURSE"), v.Get("LMI_PAYER_WM")}
+	separator := ""
+	hash := v.Get("LMI_HASH")
+	if v.Get("LMI_HASH2") != "" {
+		separator = ";"
+		hash = v.Get("LMI_HASH2")
+	}
+	expected := sha256.Sum256([]byte(strings.Join(parts, separator)))
+	actual, err := hex.DecodeString(hash)
+	if err != nil || subtle.ConstantTimeCompare(expected[:], actual) != 1 {
+		return errors.New("invalid WebMoney signature")
+	}
+	return nil
+}
+
+// Pending payments are queried even when notifications are lost. A durable claim
+// bounds retries across workers; fulfillment remains independently idempotent.
+func RunWebMoneyReconciliation(ctx context.Context) error {
+	var orders []model.WebMoneyOrder
+	if err := model.WebMoneyOrdersRequiringReconciliation(model.DB.WithContext(ctx), common.GetTimestamp()).Where("COALESCE(next_check_at, 0) <= ?", common.GetTimestamp()).Order("next_check_at, id").Limit(30).Find(&orders).Error; err != nil {
+		return err
+	}
+	var result error
+	for _, o := range orders {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		claimed := model.DB.WithContext(ctx).Model(&model.WebMoneyOrder{}).Where("id = ? AND COALESCE(next_check_at, 0) = ?", o.ID, o.NextCheckAt).Update("next_check_at", common.GetTimestamp()+120)
+		if claimed.Error != nil {
+			return claimed.Error
+		}
+		if claimed.RowsAffected == 0 {
+			continue
+		}
+		if err := ReconcileWebMoneyOrder(ctx, o.TradeNo); err != nil {
+			result = errors.New("WebMoney reconciliation requires retry")
+		}
+	}
+	return result
+}
+
+// ReconcileWebMoneyOrder obtains authoritative X18 evidence using the order's
+// frozen purse and secret. The WMID alone may be supplied by a later revision
+// for the same purse, so pre-X18 orders remain recoverable.
+func ReconcileWebMoneyOrder(ctx context.Context, trade string) error {
+	return reconcileWebMoneyOrder(ctx, trade, false)
+}
+
+// RecheckWebMoneyOrder verifies X18 even when a payment was already fulfilled.
+func RecheckWebMoneyOrder(ctx context.Context, trade string) error {
+	return reconcileWebMoneyOrder(ctx, trade, true)
+}
+
+func reconcileWebMoneyOrder(ctx context.Context, trade string, verifyCompleted bool) error {
+	o, config, err := model.GetWebMoneyOrder(trade)
+	if err != nil {
+		return err
+	}
+	if !verifyCompleted && (o.Status == "paid" || o.Status == "success") {
+		err := model.CompleteWebMoneyOrder(trade)
+		if err != nil {
+			// Completion may reset the schedule before a cache or audit write fails.
+			// Persist backoff for fulfillment failures as well as gateway failures.
+			err = errors.Join(err, model.DB.Model(o).Update("next_check_at", common.GetTimestamp()+120).Error)
+		}
+		return err
+	}
+	if o.Status != "pending" && o.Status != "expired" && o.Status != "paid" && o.Status != "success" {
+		return errors.New("WebMoney order cannot be queried")
+	}
+	if o.Status == "pending" && o.ExpiresAt <= common.GetTimestamp() {
+		if err := model.ExpireWebMoneyOrder(o.ID); err != nil {
+			return err
+		}
+	}
+	// Expiry is a local acceptance deadline, not proof of provider cancellation.
+	// Stop automatic unpaid polling after a finite grace period; signed callbacks
+	// and explicit administrator queries can still recover a late receipt.
+	if !verifyCompleted && (o.Status == "pending" || o.Status == "expired") && o.ExpiresAt <= common.GetTimestamp()-model.WebMoneyReconciliationWindowSeconds {
+		return model.DB.Model(o).Where("status IN ?", []string{"pending", "expired"}).Update("next_check_at", 0).Error
+	}
+	if config.WMID == "" {
+		current, e := model.CurrentWebMoneyConfig()
+		if e != nil {
+			return e
+		}
+		if current.Purse == config.Purse {
+			config.WMID = current.WMID
+		}
+	}
+	transaction, gatewayStatus, err := QueryWebMoneyPayment(ctx, o, config)
+	verifiedReceipt := o.Status == "paid" || o.Status == "success"
+	if gatewayStatus == "hold:12" || (verifiedReceipt && gatewayStatus == "hold:4") {
+		if saveErr := model.DB.Model(o).Updates(map[string]any{"review_required": true, "gateway_status": gatewayStatus, "checked_at": common.GetTimestamp(), "next_check_at": 0, "last_error": "manual_review_required"}).Error; saveErr != nil {
+			return saveErr
+		}
+		return model.ErrPaymentReviewRequired
+	}
+	if verifiedReceipt && (err != nil || transaction == "") {
+		if saveErr := model.DB.Model(o).Updates(map[string]any{"checked_at": common.GetTimestamp(), "last_error": "verification_failed"}).Error; saveErr != nil {
+			return saveErr
+		}
+		if err != nil {
+			return err
+		}
+		return errors.New("WebMoney no longer confirms the verified payment")
+	}
+	now := common.GetTimestamp()
+	next := min(now+120, o.ExpiresAt)
+	if o.ExpiresAt <= now {
+		switch {
+		case o.ExpiresAt <= now-model.WebMoneyReconciliationWindowSeconds:
+			next = 0
+		case o.ExpiresAt <= now-86400:
+			next = min(now+86400, o.ExpiresAt+model.WebMoneyReconciliationWindowSeconds)
+		default:
+			next = min(now+3600, o.ExpiresAt+86400)
+		}
+	}
+	updates := map[string]any{"gateway_status": gatewayStatus, "checked_at": common.GetTimestamp(), "next_check_at": next, "last_error": ""}
+	if err != nil {
+		updates["last_error"] = "verification_failed"
+	}
+	if err != nil || transaction == "" {
+		// A concurrent verified callback takes precedence over an incomplete query.
+		if saveErr := model.DB.Model(&model.WebMoneyOrder{}).Where("id = ? AND status IN ?", o.ID, []string{"pending", "expired"}).Updates(updates).Error; saveErr != nil {
+			return saveErr
+		}
+		return err
+	}
+	if o.ReviewRequired {
+		return model.ErrPaymentReviewRequired
+	}
+	updates["next_check_at"] = 0
+	saved := model.DB.Model(&model.WebMoneyOrder{}).Where("id = ? AND COALESCE(review_required, ?) = ?", o.ID, false, false).Updates(updates)
+	if saved.Error != nil {
+		return saved.Error
+	}
+	if err := model.RecordWebMoneyPayment(o, transaction); err != nil {
+		return err
+	}
+	if err := model.CompleteWebMoneyOrder(trade); err != nil {
+		return errors.Join(ErrPaymentFulfillmentPending, err)
+	}
+	return nil
+}
+
+// QueryWebMoneyPayment returns a transaction only for a completed, matching
+// merchant payment. An empty transaction means no completed payment was found.
+// Authentication uses Secret Key, never Secret Key X20 or plaintext credentials.
+func QueryWebMoneyPayment(ctx context.Context, o *model.WebMoneyOrder, c *model.WebMoneyConfig) (string, string, error) {
+	if !webMoneyWMID.MatchString(c.WMID) || !webMoneyPurse.MatchString(c.Purse) || c.Secret == "" || o.ID <= 0 {
+		return "", "query_failed", errors.New("WebMoney query requires the merchant WMID, purse and Secret Key")
+	}
+	paymentNo := strconv.FormatInt(o.ID, 10)
+	digest := sha256.Sum256([]byte(c.WMID + c.Purse + paymentNo + c.Secret))
+	payload, err := xml.Marshal(struct {
+		XMLName    xml.Name `xml:"merchant.request"`
+		WMID       string   `xml:"wmid"`
+		Purse      string   `xml:"lmi_payee_purse"`
+		PaymentNo  string   `xml:"lmi_payment_no"`
+		NumberType string   `xml:"lmi_payment_no_type"`
+		SHA256     string   `xml:"sha256"`
+	}{WMID: c.WMID, Purse: c.Purse, PaymentNo: paymentNo, NumberType: "1", SHA256: hex.EncodeToString(digest[:])})
+	if err != nil {
+		return "", "query_failed", errors.New("cannot encode WebMoney query")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://merchant.webmoney.ru/conf/xml/XMLTransGet.asp", bytes.NewReader(payload))
+	if err != nil {
+		return "", "query_failed", errors.New("cannot create WebMoney query")
+	}
+	request.Header.Set("Content-Type", "application/xml; charset=utf-8")
+	client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Do(request)
+	if err != nil {
+		return "", "query_failed", errors.New("WebMoney query unavailable")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", "query_failed", errors.New("WebMoney query returned an HTTP error")
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 65537))
+	if err != nil || len(body) > 65536 {
+		return "", "query_failed", errors.New("invalid WebMoney query response")
+	}
+	var result struct {
+		XMLName    xml.Name `xml:"merchant.response"`
+		Codes      []int    `xml:"retval"`
+		Operations []struct {
+			Transaction string `xml:"wmtransid,attr"`
+			Invoice     string `xml:"wminvoiceid,attr"`
+			Amount      string `xml:"amount"`
+			HoldState   *int   `xml:"hold_state"`
+		} `xml:"operation"`
+		ErrorLogs []struct {
+			Purse     string `xml:"lmi_payee_purse,attr"`
+			PaymentNo string `xml:"lmi_payment_no,attr"`
+		} `xml:"errorlog"`
+	}
+	if xml.Unmarshal(body, &result) != nil || len(result.Codes) != 1 {
+		return "", "query_failed", errors.New("invalid WebMoney query response")
+	}
+	for _, entry := range result.ErrorLogs {
+		if entry.Purse != c.Purse || entry.PaymentNo != paymentNo {
+			return "", "query_failed", errors.New("WebMoney query identity mismatch")
+		}
+	}
+	switch result.Codes[0] {
+	case 8, 9:
+		if len(result.Operations) != 0 {
+			return "", "query_failed", errors.New("conflicting WebMoney query result")
+		}
+		return "", "x18:" + strconv.Itoa(result.Codes[0]), nil
+	case 0:
+	default:
+		// Authentication failures and rejected invoices are not proof that the
+		// merchant order can never receive a subsequent successful payment.
+		return "", "x18:" + strconv.Itoa(result.Codes[0]), errors.New("WebMoney did not confirm a completed payment")
+	}
+	if len(result.Operations) != 1 {
+		return "", "query_failed", errors.New("missing or ambiguous WebMoney transaction")
+	}
+	operation := result.Operations[0]
+	if !webMoneyNumber.MatchString(operation.Transaction) || !webMoneyNumber.MatchString(operation.Invoice) {
+		return "", "query_failed", errors.New("invalid WebMoney transaction")
+	}
+	transaction, _ := strconv.ParseInt(operation.Transaction, 10, 64)
+	invoice, _ := strconv.ParseInt(operation.Invoice, 10, 64)
+	if transaction <= 0 || invoice <= 0 || !webMoneyAmount.MatchString(operation.Amount) {
+		return "", "query_failed", errors.New("invalid WebMoney transaction")
+	}
+	amount, err := decimal.NewFromString(operation.Amount)
+	expected, expectedErr := decimal.NewFromString(o.Amount)
+	if err != nil || expectedErr != nil || !amount.IsPositive() || !amount.Equal(expected) {
+		return "", "query_failed", errors.New("WebMoney payment amount mismatch")
+	}
+	if o.ProviderTradeNo != nil && *o.ProviderTradeNo != strconv.FormatInt(transaction, 10) {
+		return "", "query_failed", errors.New("WebMoney transaction mismatch")
+	}
+	if operation.HoldState != nil && (*operation.HoldState == 4 || *operation.HoldState == 12) {
+		return "", "hold:" + strconv.Itoa(*operation.HoldState), errors.New("WebMoney payment is held or refunded")
+	}
+	if operation.HoldState == nil || *operation.HoldState != 0 {
+		return "", "query_failed", errors.New("WebMoney payment is held or refunded")
+	}
+	return strconv.FormatInt(transaction, 10), "success", nil
+}

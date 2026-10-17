@@ -93,18 +93,18 @@ func InitializePaymentSecrets(db *gorm.DB) error {
 	}
 	for _, target := range []struct {
 		provider string
+		model    any
 		fields   []string
 	}{
-		{"alipay", []string{"private_key"}},
-		{"wechatpay", []string{"private_key", "apiv3_key"}},
+		{"alipay", &AlipayConfig{}, []string{"private_key"}},
+		{"wechatpay", &WechatPayConfig{}, []string{"private_key", "apiv3_key"}},
+		{"webmoney", &WebMoneyConfig{}, []string{"ciphertext"}},
+		{"antom", &AntomConfig{}, []string{"ciphertext"}},
+		{"antom/order", &AntomOrder{}, []string{"session_ciphertext"}},
 	} {
 		// Respect the configured GORM naming strategy rather than assuming table names.
 		stmt := &gorm.Statement{DB: db}
-		if target.provider == "alipay" {
-			err = stmt.Parse(&AlipayConfig{})
-		} else {
-			err = stmt.Parse(&WechatPayConfig{})
-		}
+		err = stmt.Parse(target.model)
 		if err != nil {
 			return errors.New("payment configuration schema unavailable")
 		}
@@ -124,21 +124,29 @@ func InitializePaymentSecrets(db *gorm.DB) error {
 			for _, row := range rows {
 				err := db.Session(&gorm.Session{Logger: logger.Discard}).Transaction(func(tx *gorm.DB) error {
 					var stored struct {
-						ID         int
-						PrivateKey string
-						APIv3Key   string
+						ID                int
+						PrivateKey        string
+						APIv3Key          string
+						Ciphertext        string
+						SessionCiphertext string
 					}
 					if err := lockForUpdate(tx.Table(table)).Select(append([]string{"id"}, target.fields...)).Where("id = ?", row.ID).Take(&stored).Error; err != nil {
 						return errors.New("cannot read payment credentials")
 					}
-					values := map[string]string{"private_key": stored.PrivateKey, "apiv3_key": stored.APIv3Key}
+					values := map[string]string{"private_key": stored.PrivateKey, "apiv3_key": stored.APIv3Key, "ciphertext": stored.Ciphertext, "session_ciphertext": stored.SessionCiphertext}
 					updates := map[string]any{}
 					for _, field := range target.fields {
 						value := values[field]
 						if value == "" {
 							continue
 						}
-						binding := fmt.Sprintf("%s/%d/%s", target.provider, row.ID, field)
+						bindingField := field
+						if field == "ciphertext" {
+							bindingField = "secret"
+						} else if field == "session_ciphertext" {
+							bindingField = "session"
+						}
+						binding := fmt.Sprintf("%s/%d/%s", target.provider, row.ID, bindingField)
 						plain := value
 						if strings.HasPrefix(value, paymentsecret.Prefix) {
 							plain, err = ring.Open(value, binding)
@@ -151,6 +159,11 @@ func InitializePaymentSecrets(db *gorm.DB) error {
 						} else {
 							if !migrate {
 								return errors.New("plaintext payment credentials require explicit offline migration")
+							}
+							// These channels have always used encrypted storage. Never interpret
+							// a damaged envelope as a legacy plaintext value during rotation.
+							if field == "ciphertext" || field == "session_ciphertext" {
+								return errors.New("invalid encrypted payment credential")
 							}
 							// Unknown/corrupt envelopes must never be reclassified as legacy secrets.
 							if field == "private_key" {
@@ -200,12 +213,15 @@ type PaymentSecretStatus struct {
 	MigrationEnabled bool   `json:"migration_enabled"`
 	Alipay           string `json:"alipay"`
 	WechatPay        string `json:"wechatpay"`
+	WebMoney         string `json:"webmoney"`
+	Antom            string `json:"antom"`
+	AntomSessions    string `json:"antom_sessions"`
 }
 
 // InspectPaymentSecrets is read-only, including when migration mode is enabled.
 // Check historical revisions too, as pending orders can still reference them.
 func InspectPaymentSecrets(db *gorm.DB) PaymentSecretStatus {
-	status := PaymentSecretStatus{KeyFileStatus: "unconfigured", MigrationEnabled: os.Getenv("PAYMENT_SECRET_MIGRATE") == "1", Alipay: "unknown", WechatPay: "unknown"}
+	status := PaymentSecretStatus{KeyFileStatus: "unconfigured", MigrationEnabled: os.Getenv("PAYMENT_SECRET_MIGRATE") == "1", Alipay: "unknown", WechatPay: "unknown", WebMoney: "unknown", Antom: "unknown", AntomSessions: "unknown"}
 	if os.Getenv("PAYMENT_SECRET_KEY_FILE") == "" {
 		return status
 	}
@@ -223,14 +239,19 @@ func InspectPaymentSecrets(db *gorm.DB) PaymentSecretStatus {
 	}{
 		{"alipay", &AlipayConfig{}, []string{"id", "private_key"}, &status.Alipay},
 		{"wechatpay", &WechatPayConfig{}, []string{"id", "private_key", "apiv3_key"}, &status.WechatPay},
+		{"webmoney", &WebMoneyConfig{}, []string{"id", "ciphertext"}, &status.WebMoney},
+		{"antom", &AntomConfig{}, []string{"id", "ciphertext"}, &status.Antom},
+		{"antom/order", &AntomOrder{}, []string{"id", "session_ciphertext"}, &status.AntomSessions},
 	} {
 		*target.result = "empty"
 		lastID := 0
 		for {
 			var rows []struct {
-				ID         int
-				PrivateKey string
-				APIv3Key   string
+				ID                int
+				PrivateKey        string
+				APIv3Key          string
+				Ciphertext        string
+				SessionCiphertext string
 			}
 			err := db.Session(&gorm.Session{Logger: logger.Discard}).Model(target.model).Select(target.fields).Where("id > ?", lastID).Order("id").Limit(100).Find(&rows).Error
 			if err != nil {
@@ -241,7 +262,7 @@ func InspectPaymentSecrets(db *gorm.DB) PaymentSecretStatus {
 				break
 			}
 			for _, row := range rows {
-				for field, value := range map[string]string{"private_key": row.PrivateKey, "apiv3_key": row.APIv3Key} {
+				for field, value := range map[string]string{"private_key": row.PrivateKey, "apiv3_key": row.APIv3Key, "secret": row.Ciphertext, "session": row.SessionCiphertext} {
 					if value == "" {
 						continue
 					}

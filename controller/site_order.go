@@ -52,7 +52,65 @@ func GetSiteOrder(c *gin.Context) {
 		c.AbortWithStatus(http.StatusServiceUnavailable)
 		return
 	}
+	if err := model.DB.Where("trade_no = ? AND provider = ?", order.TradeNo, order.PaymentProvider).Order("id DESC").Limit(20).Find(&order.Reviews).Error; err != nil {
+		c.AbortWithStatus(http.StatusServiceUnavailable)
+		return
+	}
 	common.ApiSuccess(c, order)
+}
+
+func ReviewSiteOrder(c *gin.Context) {
+	if c.GetInt("role") < common.RoleRootUser || c.GetBool("use_access_token") {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	if c.ContentType() != "application/json" {
+		c.AbortWithStatus(http.StatusUnsupportedMediaType)
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+	var request struct {
+		Note      string `json:"note"`
+		Action    string `json:"action"`
+		Reference string `json:"reference"`
+		Version   string `json:"version"`
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id == 0 || c.ShouldBindJSON(&request) != nil {
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	order, err := model.GetSiteOrder(id)
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if request.Action == "" {
+		err = model.RecordPaymentReview(order, c.GetInt("id"), request.Note)
+	} else {
+		err = model.ResolvePaymentReview(order, c.GetInt("id"), request.Action, request.Note, request.Reference, request.Version)
+	}
+	if err != nil {
+		common.ApiErrorMsg(c, "无法记录复核结果，请检查订单状态及备注长度")
+		return
+	}
+	model.RecordAuditLog(c, model.AuditLog{UserId: c.GetInt("id"), ActorRole: c.GetInt("role"), Category: model.AuditCategoryOperation, Action: "payment.order.review", Content: order.TradeNo, Success: true, Other: model.AuditOther{Op: &model.AuditOperation{Action: "payment.order.review", Params: model.AuditFields{"resolution": request.Action, "reference": request.Reference}}}})
+	// Financial changes are committed; these retries only synchronize caches/logs.
+	if request.Action == "fulfill" {
+		switch order.PaymentProvider {
+		case model.PaymentProviderAntom:
+			_ = model.CompleteAntomOrder(order.TradeNo)
+		case model.PaymentProviderWebMoney:
+			_ = model.CompleteWebMoneyOrder(order.TradeNo)
+		case model.PaymentProviderMixPay:
+			_ = model.SyncMixPayFulfillment(order.TradeNo)
+		case model.PaymentProviderAlipay:
+			_ = model.CompleteAlipayTopUp(order.TradeNo)
+		case model.PaymentProviderWechatPay:
+			_ = model.CompleteWechatPayTopUp(order.TradeNo)
+		}
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func RecheckSiteOrder(c *gin.Context) {
@@ -103,10 +161,11 @@ func reconcileSiteOrder(c *gin.Context, reason string) {
 		c.AbortWithStatus(http.StatusServiceUnavailable)
 		return
 	}
-	if order.OrderType != "topup" || (order.PaymentProvider != model.PaymentProviderAlipay && order.PaymentProvider != model.PaymentProviderWechatPay) {
+	if order.PaymentProvider != model.PaymentProviderMixPay && order.PaymentProvider != model.PaymentProviderAntom && order.PaymentProvider != model.PaymentProviderWebMoney && order.PaymentProvider != model.PaymentProviderAlipay && order.PaymentProvider != model.PaymentProviderWechatPay {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
+
 	LockOrder(order.TradeNo)
 	defer UnlockOrder(order.TradeNo)
 	// Read again after the process lock; database settlement remains the cross-instance guard.
@@ -116,10 +175,16 @@ func reconcileSiteOrder(c *gin.Context, reason string) {
 		return
 	}
 	beforeStatus := order.OrderStatus
-	if order.PaymentProvider == model.PaymentProviderAlipay {
-		err = service.ReconcileAlipayOrder(c.Request.Context(), order.TradeNo)
+	if order.PaymentProvider == model.PaymentProviderMixPay {
+		err = service.RecheckMixPayOrder(c.Request.Context(), order.TradeNo)
+	} else if order.PaymentProvider == model.PaymentProviderAntom {
+		err = service.RecheckAntomOrder(c.Request.Context(), order.TradeNo)
+	} else if order.PaymentProvider == model.PaymentProviderWebMoney {
+		err = service.RecheckWebMoneyOrder(c.Request.Context(), order.TradeNo)
+	} else if order.PaymentProvider == model.PaymentProviderAlipay {
+		err = service.RecheckAlipayOrder(c.Request.Context(), order.TradeNo)
 	} else {
-		err = service.ReconcileWechatPayOrder(c.Request.Context(), order.TradeNo)
+		err = service.RecheckWechatPayOrder(c.Request.Context(), order.TradeNo)
 	}
 
 	result := "verification_failed"
@@ -142,10 +207,23 @@ func reconcileSiteOrder(c *gin.Context, reason string) {
 			result = "credit_pending"
 		case common.TopUpStatusExpired:
 			result = "closed"
+			if updated.CloseReason == "local_expiry" {
+				result = "expired"
+			}
 		case common.TopUpStatusPending:
 			if err == nil {
 				result = "unpaid"
 			}
+		}
+	}
+	if (err != nil && !errors.Is(err, service.ErrPaymentFulfillmentPending)) || readErr != nil || (updated != nil && updated.ReviewRequired) {
+		result = "verification_failed"
+	}
+	if order.PaymentProvider == model.PaymentProviderMixPay {
+		if err != nil || (updated != nil && updated.ReviewRequired) {
+			result = "verification_failed"
+		} else if updated != nil && updated.OrderStatus == "failed" {
+			result = "closed"
 		}
 	}
 	action := "payment.order.recheck"
@@ -181,12 +259,16 @@ func reconcileSiteOrder(c *gin.Context, reason string) {
 // reconciliation errors or administrator audit information.
 func personalOrderView(order model.SiteOrder) gin.H {
 	return gin.H{
-		"order_type": order.OrderType, "currency": order.PaymentReceipt.ReceiptCurrency, "payment_amount": order.PaymentReceipt.ReceiptAmount,
+		"gateway_status":     order.GatewayStatus,
+		"close_reason":       order.CloseReason,
+		"cancellation_state": order.CancellationState,
+		"cancellation_code":  order.CancellationCode,
+		"order_type":         order.OrderType, "currency": order.Currency, "payment_amount": order.PaymentAmount,
 		"id": order.Id, "trade_no": order.TradeNo, "provider_trade_no": order.ProviderTradeNo,
 		"payment_provider": order.PaymentProvider, "payment_method": order.PaymentMethod,
 		"order_status": order.OrderStatus, "amount_fen": order.AmountFen, "frozen_quota": order.FrozenQuota,
 		"money": order.Money, "create_time": order.CreateTime, "complete_time": order.CompleteTime,
-		"expires_at": order.ExpiresAt, "sandbox": order.Sandbox, "cancel_requested": order.CancelRequested, "close_requested_at": order.CloseRequestedAt, "closed_at": order.ClosedAt, "review_required": order.ReviewRequired,
+		"expires_at": order.ExpiresAt, "sandbox": order.Sandbox, "cancel_requested": order.CancelRequested, "close_requested_at": order.CloseRequestedAt, "closed_at": order.ClosedAt, "review_required": order.ReviewRequired, "review_resolution": order.ReviewResolution,
 	}
 }
 
@@ -238,4 +320,34 @@ func GetPersonalOrder(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, personalOrderView(orders[0]))
+}
+
+func CancelAntomSiteOrder(c *gin.Context) {
+	if c.GetInt("role") < common.RoleRootUser || c.GetBool("use_access_token") {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id == 0 {
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	order, err := model.GetSiteOrder(id)
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if order.PaymentProvider != model.PaymentProviderAntom {
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	LockOrder(order.TradeNo)
+	defer UnlockOrder(order.TradeNo)
+	status, err := service.CancelAntomOrder(c.Request.Context(), order.TradeNo)
+	model.RecordAuditLog(c, model.AuditLog{UserId: c.GetInt("id"), ActorRole: c.GetInt("role"), Category: model.AuditCategoryOperation, Action: "payment.antom.cancel", Content: order.TradeNo, Success: err == nil})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"status": status})
 }

@@ -156,10 +156,10 @@ afterEach(() => {
   localStorage.clear()
 })
 
-it('shows email instead of username and prevents selecting disabled, deleted, self and peer accounts', async () => {
+it('shows the account identity and prevents selecting disabled, deleted, self and peer accounts', async () => {
   await renderUsers()
-  expect(screen.getByRole('columnheader', { name: 'Email' })).toBeVisible()
-  expect(screen.queryByText('legacy-name')).not.toBeInTheDocument()
+  expect(screen.getByRole('columnheader', { name: 'User' })).toBeVisible()
+  expect(screen.getAllByText('legacy-name').length).toBeGreaterThan(0)
   const checkboxes = screen.getAllByRole('checkbox', { name: 'Select row' })
   for (const index of [0, 3, 4, 5]) {
     expect(checkboxes[index]).toHaveAttribute('aria-disabled', 'true')
@@ -179,7 +179,7 @@ it('shows a placeholder for an account without email and allows root to select a
   expect(
     within(screen.getAllByRole('row')[1]).getAllByRole('cell')[2]
   ).toHaveTextContent('—')
-  expect(screen.queryByText('legacy-name')).not.toBeInTheDocument()
+  expect(screen.getAllByText('legacy-name').length).toBeGreaterThan(0)
   const checkbox = screen.getAllByRole('checkbox', { name: 'Select row' })[1]
   await userEvent.click(checkbox)
   expect(checkbox).toBeChecked()

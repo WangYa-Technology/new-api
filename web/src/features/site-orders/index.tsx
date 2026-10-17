@@ -63,16 +63,22 @@ const emptyFilters: OrderFilters = {
   end: '',
 }
 const emptyOrders: SiteOrder[] = []
-export function SiteOrders(props: { scope?: OrderScope }) {
+export function SiteOrders(props: {
+  scope?: OrderScope
+  initialOrderNumber?: string
+}) {
   const scope = props.scope ?? 'site'
   const personal = scope === 'personal'
   const payment = useOrderPayment()
   const { t, i18n } = useTranslation()
   const userId = useAuthStore((state) => state.auth.user?.id)
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const [filters, setFilters] = useState(emptyFilters)
+  const [filters, setFilters] = useState({
+    ...emptyFilters,
+    keyword: props.initialOrderNumber ?? '',
+  })
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number | null | undefined>(undefined)
   const updateFilters = (patch: Partial<OrderFilters>) => {
     setFilters((current) => ({ ...current, ...patch }))
     setPagination((current) => ({ ...current, pageIndex: 0 }))
@@ -83,6 +89,12 @@ export function SiteOrders(props: { scope?: OrderScope }) {
       getOrders(filters, pagination.pageIndex + 1, pagination.pageSize, scope),
     refetchInterval: personal ? 5000 : false,
   })
+  const selectedOrderID =
+    selected === undefined
+      ? (query.data?.items.find(
+          (order) => order.trade_no === props.initialOrderNumber
+        )?.id ?? null)
+      : selected
   const columns: ColumnDef<SiteOrder>[] = [
     {
       accessorKey: 'create_time',
@@ -184,23 +196,36 @@ export function SiteOrders(props: { scope?: OrderScope }) {
               >
                 {t('Pay')}
               </Button>
+              {!['mixpay', 'webmoney'].includes(
+                row.original.payment_provider
+              ) && (
+                <Button
+                  variant='outline'
+                  size='sm'
+                  disabled={payment.busy}
+                  onClick={() => payment.requestCancel(row.original)}
+                >
+                  {t('Cancel')}
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              {personal &&
+                row.original.payment_provider === 'mixpay' &&
+                row.original.order_status === 'pending' && (
+                  <Button size='sm' disabled>
+                    {t('Pay')}
+                  </Button>
+                )}
               <Button
                 variant='outline'
                 size='sm'
-                disabled={payment.busy}
-                onClick={() => payment.requestCancel(row.original)}
+                onClick={() => setSelected(row.original.id)}
               >
-                {t('Cancel')}
+                {t('Details')}
               </Button>
             </>
-          ) : (
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={() => setSelected(row.original.id)}
-            >
-              {t('Details')}
-            </Button>
           )}
         </div>
       ),
@@ -227,6 +252,9 @@ export function SiteOrders(props: { scope?: OrderScope }) {
   const providerOptions = [
     { value: 'all', label: t('All') },
     ...[
+      'mixpay',
+      'webmoney',
+      'antom',
       'alipay',
       'wechatpay',
       'epay',
@@ -251,6 +279,7 @@ export function SiteOrders(props: { scope?: OrderScope }) {
     { value: 'pending', label: t('Awaiting payment') },
     { value: 'paid', label: t('Paid, awaiting credit') },
     { value: 'paid_review', label: t('Paid, awaiting manual review') },
+    { value: 'review_closed', label: t('Review resolved') },
     { value: 'success', label: t('Completed') },
     { value: 'expired', label: t('Closed') },
     { value: 'failed', label: t('Failed') },
@@ -356,8 +385,8 @@ export function SiteOrders(props: { scope?: OrderScope }) {
           </div>
           {payment.dialogs}
           <OrderDetail
-            key={selected}
-            id={selected}
+            key={selectedOrderID}
+            id={selectedOrderID}
             scope={scope}
             onClose={() => setSelected(null)}
           />

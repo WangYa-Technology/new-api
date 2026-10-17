@@ -34,10 +34,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { parseBusinessContacts } from '@/features/home/lib/business-contacts'
 import { INTERFACE_LANGUAGE_OPTIONS } from '@/i18n/languages'
 
+import { BusinessContactsInput } from '../components/business-contacts-input'
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
+import { ImageSettingInput } from '../components/image-setting-input'
 import {
   SettingsForm,
   SettingsFormGrid,
@@ -53,6 +56,7 @@ import { isValidTaskPublicAddress } from './task-public-address'
 
 const _systemInfoSchema = z.object({
   console_setting: z.object({
+    home_business_qrcode: z.string().optional(),
     home_globe_domestic_only: z.boolean().optional(),
     default_language: z.enum([
       'auto',
@@ -98,6 +102,9 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
 
   const normalizedDefaults: SystemInfoFormValues = {
     console_setting: {
+      home_business_qrcode: normalizeValue(
+        defaultValues.console_setting?.home_business_qrcode
+      ),
       home_globe_domestic_only:
         defaultValues.console_setting?.home_globe_domestic_only === true,
       default_language:
@@ -120,7 +127,31 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
   }
 
   const systemInfoSchemaWithI18n = z.object({
-    console_setting: _systemInfoSchema.shape.console_setting,
+    console_setting: _systemInfoSchema.shape.console_setting.extend({
+      home_business_qrcode: z
+        .string()
+        .optional()
+        .refine(
+          (value) => {
+            if (!value || value === '[]') return true
+            const contacts = parseBusinessContacts(value)
+            return (
+              contacts.length > 0 &&
+              contacts.length <= 8 &&
+              contacts.every(
+                (contact) =>
+                  contact.label.trim().length > 0 &&
+                  contact.label.length <= 80 &&
+                  /^(https?:\/\/|data:image\/)/.test(contact.image)
+              )
+            )
+          },
+          {
+            error: () =>
+              t('Provide a label and QR code image for each channel.'),
+          }
+        ),
+    }),
     SystemName: z.string().min(1, {
       error: () => t('System name is required'),
     }),
@@ -304,20 +335,52 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                 name='Logo'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Logo URL')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('https://example.com/logo.png')}
-                        {...field}
-                      />
-                    </FormControl>
+                    <FormLabel>{t('Logo')}</FormLabel>
+                    <ImageSettingInput
+                      label={t('Logo')}
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      disabled={isSubmitting}
+                    />
                     <FormDescription>
-                      {t('URL to your logo image (optional)')}
+                      {t(
+                        'Enter a logo URL or upload a local image. Save changes to apply.'
+                      )}{' '}
+                      {t(
+                        'Supports PNG, JPG, WebP, or GIF. Maximum file size: 2 MB.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              <SettingsFormGridItem span='full'>
+                <FormField
+                  control={form.control}
+                  name='console_setting.home_business_qrcode'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('Business cooperation channels')}
+                      </FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Add up to 8 contact channels with a label below each QR code. Leave the list empty to hide business cooperation on the homepage.'
+                        )}{' '}
+                        {t(
+                          'Supports PNG, JPG, WebP, or GIF. Maximum file size: 2 MB.'
+                        )}
+                      </FormDescription>
+                      <BusinessContactsInput
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        disabled={isSubmitting}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SettingsFormGridItem>
 
               <FormField
                 control={form.control}
