@@ -40,8 +40,9 @@ beforeAll(async () => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  await i18next.changeLanguage('en')
 })
 
 // Prefer reduced motion in tests: entrance animations write inline

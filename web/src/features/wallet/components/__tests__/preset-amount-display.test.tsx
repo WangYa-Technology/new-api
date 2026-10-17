@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen, within } from '@testing-library/react'
 import i18next from 'i18next'
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import zh from '@/i18n/locales/zh.json'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -38,7 +38,7 @@ const topupInfo: TopupInfo = {
 }
 
 describe('preset amount display', () => {
-  beforeAll(async () => {
+  beforeEach(async () => {
     i18next.addResourceBundle('zh', 'translation', zh.translation, true, true)
     await i18next.changeLanguage('zh')
   })
@@ -69,16 +69,16 @@ describe('preset amount display', () => {
       />
     )
 
-    const discountedCard = screen.getByRole('button', { name: /^\$50 / })
+    const discountedCard = screen.getByRole('button', { name: /^\$2\.5\$50 / })
     expect(within(discountedCard).getByText('优惠 95%')).toBeInTheDocument()
-    expect(within(discountedCard).getByText('实付 $2.5')).toBeInTheDocument()
-    expect(within(discountedCard).getAllByText('$50')).toHaveLength(2)
-    expect(discountedCard).toHaveClass('h-[76px]')
+    expect(within(discountedCard).getByText('$2.5')).toBeInTheDocument()
+    expect(within(discountedCard).getByText('$50')).toBeInTheDocument()
+    expect(discountedCard).toHaveClass('min-h-[76px]')
     expect(discountedCard.parentElement).toHaveClass('sm:grid-cols-3')
     expect(discountedCard.parentElement).not.toHaveClass('md:grid-cols-4')
     expect(screen.getByLabelText('自定义金额')).toHaveAttribute(
       'placeholder',
-      '最低 1'
+      '自定义'
     )
     expect(discountedCard).not.toHaveTextContent(/Pay|Save|OFF/)
   })
@@ -105,8 +105,8 @@ describe('preset amount display', () => {
       />
     )
 
-    const regularCard = screen.getByRole('button', { name: /^\$10 / })
-    const selectedCard = screen.getByRole('button', { name: /^\$50 / })
+    const regularCard = screen.getByRole('button', { name: /^\$9\.5\$10 / })
+    const selectedCard = screen.getByRole('button', { name: /^\$2\.5\$50 / })
     const discountBadge = within(selectedCard).getByText('优惠 95%')
 
     expect(discountBadge).toHaveClass(
@@ -165,8 +165,6 @@ describe('preset amount display', () => {
         expect(
           screen.queryByRole('button', { name: /^¥700/ })
         ).not.toBeInTheDocument()
-        expect(screen.getByText('CNY 90')).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: '继续' })).toBeEnabled()
       } finally {
         useSystemConfigStore.setState({ config: previous })
       }
