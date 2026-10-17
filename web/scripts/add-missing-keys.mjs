@@ -9,6 +9,101 @@ License, or (at your option) any later version.
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
+const extraKeys = {
+  en: {
+    'Listing hidden': 'Listing hidden',
+    'Zhipu GLM': 'Zhipu GLM',
+    'Connect to the Anthropic API or compatible services':
+      'Connect to the Anthropic API or compatible services',
+    '{{operation}} (ID: {{id}})': '{{operation}} (ID: {{id}})',
+    'Increase user quota': 'Increase user quota',
+    'Increase quota for user “{{name}}”': 'Increase quota for user “{{name}}”',
+    'Decrease user quota': 'Decrease user quota',
+    'Decrease quota for user “{{name}}”': 'Decrease quota for user “{{name}}”',
+    'Override user quota': 'Override user quota',
+    'Override quota for user “{{name}}”': 'Override quota for user “{{name}}”',
+    'Adjust user quota': 'Adjust user quota',
+    'Adjust quota for user “{{name}}”': 'Adjust quota for user “{{name}}”',
+    'Target not recorded': 'Target not recorded',
+    'Requested quota: {{quota}}': 'Requested quota: {{quota}}',
+    'Requested quota': 'Requested quota',
+    'Target username': 'Target username',
+    'User ID': 'User ID',
+    'Adjustment mode': 'Adjustment mode',
+    'Quota before adjustment': 'Quota before adjustment',
+    'Quota after adjustment': 'Quota after adjustment',
+    'Quota unchanged': 'Quota unchanged',
+    'Invalid adjustment parameters': 'Invalid adjustment parameters',
+    'Insufficient permission to adjust this user': 'Insufficient permission to adjust this user',
+    'Target user not found': 'Target user not found',
+    'Wallet quota limit exceeded': 'Wallet quota limit exceeded',
+    'Quota update failed': 'Quota update failed',
+    'Failure reason': 'Failure reason',
+  },
+  zh: {
+    'Listing hidden': '已隐藏',
+    'Zhipu GLM': '智谱GLM',
+    'Connect to the Anthropic API or compatible services': '接入 Anthropic API 或兼容其接口的服务',
+    '{{operation}} (ID: {{id}})': '{{operation}}（ID: {{id}}）',
+    'Increase user quota': '增加用户额度',
+    'Increase quota for user “{{name}}”': '增加用户「{{name}}」的额度',
+    'Decrease user quota': '减少用户额度',
+    'Decrease quota for user “{{name}}”': '减少用户「{{name}}」的额度',
+    'Override user quota': '覆盖用户额度',
+    'Override quota for user “{{name}}”': '覆盖用户「{{name}}」的额度',
+    'Adjust user quota': '调整用户额度',
+    'Adjust quota for user “{{name}}”': '调整用户「{{name}}」的额度',
+    'Target not recorded': '目标未记录',
+    'Requested quota: {{quota}}': '请求数额：{{quota}}',
+    'Requested quota': '请求数额',
+    'Target username': '目标用户名',
+    'User ID': '用户 ID',
+    'Adjustment mode': '调整方式',
+    'Quota before adjustment': '调整前额度',
+    'Quota after adjustment': '调整后额度',
+    'Quota unchanged': '额度未变化',
+    'Invalid adjustment parameters': '调整参数无效',
+    'Insufficient permission to adjust this user': '没有调整该用户的权限',
+    'Target user not found': '未找到目标用户',
+    'Wallet quota limit exceeded': '超出钱包额度限制',
+    'Quota update failed': '额度更新失败',
+    'Failure reason': '失败原因',
+  },
+  'zh-TW': {
+    'Listing hidden': '已隱藏',
+    'Zhipu GLM': '智譜GLM',
+    'Connect to the Anthropic API or compatible services': '連接 Anthropic API 或相容服務',
+    '{{operation}} (ID: {{id}})': '{{operation}}（ID: {{id}}）',
+    'Increase user quota': '增加使用者額度',
+    'Increase quota for user “{{name}}”': '增加使用者「{{name}}」的額度',
+    'Decrease user quota': '減少使用者額度',
+    'Decrease quota for user “{{name}}”': '減少使用者「{{name}}」的額度',
+    'Override user quota': '覆蓋使用者額度',
+    'Override quota for user “{{name}}”': '覆蓋使用者「{{name}}」的額度',
+    'Adjust user quota': '調整使用者額度',
+    'Adjust quota for user “{{name}}”': '調整使用者「{{name}}」的額度',
+    'Target not recorded': '未記錄目標',
+    'Requested quota: {{quota}}': '請求額度：{{quota}}',
+    'Requested quota': '請求額度',
+    'Target username': '目標使用者名稱',
+    'User ID': '使用者 ID',
+    'Adjustment mode': '調整方式',
+    'Quota before adjustment': '調整前額度',
+    'Quota after adjustment': '調整後額度',
+    'Quota unchanged': '額度未變更',
+    'Invalid adjustment parameters': '調整參數無效',
+    'Insufficient permission to adjust this user': '沒有調整此使用者的權限',
+    'Target user not found': '找不到目標使用者',
+    'Wallet quota limit exceeded': '超過錢包額度限制',
+    'Quota update failed': '額度更新失敗',
+    'Failure reason': '失敗原因',
+  },
+  fr: {},
+  ja: {},
+  ru: {},
+  vi: {},
+}
+
 const newKeys = {
   en: {
     'Add column': 'Add column',
@@ -504,11 +599,16 @@ const newKeys = {
   },
 }
 
+for (const locale of ['fr', 'ja', 'ru', 'vi']) {
+  Object.assign(extraKeys[locale], extraKeys.en)
+}
+
 for (const [locale, additions] of Object.entries(newKeys)) {
   const file = path.resolve(`src/i18n/locales/${locale}.json`)
   const messages = JSON.parse(await fs.readFile(file, 'utf8'))
+  const mergedAdditions = { ...additions, ...extraKeys[locale] }
   messages.translation = Object.fromEntries(
-    Object.entries({ ...messages.translation, ...additions }).sort(([a], [b]) =>
+    Object.entries({ ...messages.translation, ...mergedAdditions }).sort(([a], [b]) =>
       a.localeCompare(b)
     )
   )
