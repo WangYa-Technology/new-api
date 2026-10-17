@@ -5,16 +5,13 @@
 ## 固定流程
 
 1. 在 `main` 完成开发、代码审查和必要验证。
-2. 将确认过的 `main` 合并到 `release`：
+2. 从 `main` 创建发版 PR，目标分支为 `release`。PR 必须经过审查和 CI，通过后由有权限的维护者手动合并；禁止直接 push 到 `release`：
 
    ```bash
-   git switch release
-   git pull --ff-only origin release
-   git merge --ff-only origin/main
-   git push origin release
+   gh pr create --base release --head main --title "release: merge main for vX.Y.Z"
    ```
 
-3. 在 `release` 分支验证构建、数据库迁移和关键功能。禁止在 `release` 上直接开发提交；发现问题时回到 `main` 修复，再重新合并。
+3. 在 `release` 分支验证构建、数据库迁移和关键功能。禁止在 `release` 上直接开发提交；发现问题时回到 `main` 修复，再通过新的 PR 合入。
 4. 确认版本号后，在 `release` 当前提交创建并推送签名标签：
 
    ```bash
