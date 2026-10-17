@@ -22,6 +22,23 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+      - name: Verify release source
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/release ]]; then
+            echo "Release source verified: release branch"
+            exit 0
+          fi
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "::error::Release workflows may run only from the release branch or a tag"
+            exit 1
+          fi
+          git fetch origin refs/heads/release:refs/remotes/origin/release
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/release; then
+            echo "::error::Tag commit is not contained in origin/release"
+            exit 1
+          fi
+          echo "Release source verified: tag points to release branch history"
       - name: Determine Version
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
@@ -79,6 +96,23 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+      - name: Verify release source
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/release ]]; then
+            echo "Release source verified: release branch"
+            exit 0
+          fi
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "::error::Release workflows may run only from the release branch or a tag"
+            exit 1
+          fi
+          git fetch origin refs/heads/release:refs/remotes/origin/release
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/release; then
+            echo "::error::Tag commit is not contained in origin/release"
+            exit 1
+          fi
+          echo "Release source verified: tag points to release branch history"
       - name: Determine Version
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
@@ -135,6 +169,23 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+      - name: Verify release source
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/release ]]; then
+            echo "Release source verified: release branch"
+            exit 0
+          fi
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "::error::Release workflows may run only from the release branch or a tag"
+            exit 1
+          fi
+          git fetch origin refs/heads/release:refs/remotes/origin/release
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/release; then
+            echo "::error::Tag commit is not contained in origin/release"
+            exit 1
+          fi
+          echo "Release source verified: tag points to release branch history"
       - name: Determine Version
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
