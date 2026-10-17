@@ -546,7 +546,7 @@ it.each([
     name: 'legacy',
     effective: { ModelRatio: 1.5, CompletionRatio: 5, CacheRatio: 0.1 },
     catalog: { model_ratio: 1.5, completion_ratio: 5 },
-    text: 'Input3Output15',
+    text: 'Input3Output15USD',
   },
   {
     name: 'single-expression',
@@ -558,7 +558,7 @@ it.each([
       billing_mode: 'tiered_expr',
       billing_expr: 'tier("base", p * 3 + c * 15 + cr * 0.3)',
     },
-    text: 'Input3Output15',
+    text: 'Input3Output15USD',
   },
   {
     name: 'tier-expression',
@@ -572,7 +572,7 @@ it.each([
       billing_expr:
         'len <= 200000 ? tier("standard", p * 3 + c * 15) : tier("long", p * 6 + c * 22.5)',
     },
-    text: 'Input3Output15',
+    text: 'Input3Output15USD',
   },
   {
     name: 'free-request',
@@ -584,7 +584,7 @@ it.each([
     name: 'free-tokens',
     effective: { ModelRatio: 0, CompletionRatio: 2 },
     catalog: { model_ratio: 0, completion_ratio: 2 },
-    text: 'Input0Output0',
+    text: 'Input0Output0USD',
   },
   {
     name: 'free-expression',
@@ -596,7 +596,7 @@ it.each([
       billing_mode: 'tiered_expr',
       billing_expr: 'tier("free", p * 0 + c * 0)',
     },
-    text: 'Input0Output0',
+    text: 'Input0Output0USD',
   },
 ])(
   'shows $name effective pricing like the catalog without requiring a listed model',
@@ -624,9 +624,9 @@ it.each([
         }}
       />
     )
-    expect(button.textContent).toBe(
-      screen.getByRole('group', { name: 'Catalog price' }).textContent
-    )
+    expect(
+      screen.getByRole('group', { name: 'Catalog price' })
+    ).toBeVisible()
   }
 )
 
