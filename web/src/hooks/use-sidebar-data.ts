@@ -41,7 +41,9 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
+import { hasPermission } from '@/lib/admin-permissions'
 import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 /**
  * Root navigation groups for the application sidebar.
@@ -51,6 +53,7 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const user = useAuthStore((state) => state.auth.user)
 
   return {
     navGroups: [
@@ -143,6 +146,17 @@ export function useSidebarData(): SidebarData {
         id: 'admin',
         title: t('Admin'),
         items: [
+          ...(['operate', 'write', 'sensitive_write'].some((action) =>
+            hasPermission(user, 'support', action)
+          )
+            ? [
+                {
+                  title: t('Support workbench'),
+                  url: '/support-workbench',
+                  icon: MessageSquare,
+                },
+              ]
+            : []),
           {
             title: t('Channels'),
             url: '/channels',

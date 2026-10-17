@@ -45,6 +45,14 @@ func TestInitSeedsBuiltInRolesAndPoliciesOnce(t *testing.T) {
 	assert.Equal(t, BuiltInRoleRoot, roles[0].Key)
 	assert.Equal(t, BuiltInRoleAdmin, roles[1].Key)
 
+	assert.True(t, Can(1, common.RoleRootUser, SupportConfigure))
+	assert.True(t, Can(1, common.RoleRootUser, SupportKnowledgeWrite))
+	assert.False(t, Can(2, common.RoleAdminUser, SupportConfigure))
+	assert.False(t, Can(2, common.RoleAdminUser, SupportKnowledgeWrite))
+	require.NoError(t, SetUserPermissions(42, PermissionsMap{"support": {ActionWrite: true}}))
+	assert.True(t, Can(42, common.RoleAdminUser, SupportKnowledgeWrite))
+	assert.False(t, Can(42, common.RoleAdminUser, SupportConfigure))
+	assert.True(t, Can(2, common.RoleAdminUser, SupportOperate))
 	assert.True(t, Can(1, common.RoleRootUser, ChannelSensitiveWrite))
 	assert.True(t, Can(2, common.RoleAdminUser, ChannelRead))
 	assert.True(t, Can(2, common.RoleAdminUser, ChannelOperate))
@@ -158,6 +166,7 @@ func TestSetUserPermissionsStoresOnlyOverrides(t *testing.T) {
 			ActionBind: false,
 		},
 		ResourceAudit: {ActionRead: false},
+		"support":     {ActionOperate: true},
 	}, ExplicitUserPermissions(42))
 	assert.Equal(t, PermissionsMap{
 		ResourceChannel: {
@@ -190,6 +199,7 @@ func TestSetUserPermissionsStoresOnlyOverrides(t *testing.T) {
 			ActionBind: false,
 		},
 		ResourceAudit: {ActionRead: false},
+		"support":     {ActionOperate: true},
 	}, ExplicitUserPermissions(42))
 	assert.Empty(t, ExplicitUserOverrides(42))
 }

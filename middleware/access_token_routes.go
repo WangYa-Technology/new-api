@@ -41,6 +41,14 @@ func accessTokenScopeRule(scope string) accessTokenRouteRule {
 // Casbin-guarded routes declare themselves through
 // DeclareAccessTokenPermissionRoute when they are registered.
 var accessTokenRouteRules = map[string]accessTokenRouteRule{
+	"GET /api/support-chat/orders":        accessTokenSessionRule,
+	"GET /api/support-chat/knowledge":     accessTokenSessionRule,
+	"GET /api/support-chat/info":          accessTokenSessionRule,
+	"GET /api/support-chat/history":       accessTokenSessionRule,
+	"GET /api/support-chat/conversations": accessTokenSessionRule,
+	"POST /api/support-chat/action":       accessTokenSessionRule,
+	"GET /api/support-chat/events":        accessTokenSessionRule,
+
 	// Direct payments and order management retain their existing session-only access.
 	"GET /api/option/alipay":                  accessTokenSessionRule,
 	"GET /api/option/wechatpay":               accessTokenSessionRule,

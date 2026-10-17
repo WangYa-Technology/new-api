@@ -340,6 +340,7 @@ func migrateDB() error {
 	}
 
 	err := DB.AutoMigrate(
+		&SupportConversation{}, &SupportThread{}, &SupportMessage{}, &SupportSettings{},
 		&Channel{},
 		&Token{},
 		&User{},
@@ -390,6 +391,9 @@ func migrateDB() error {
 		&UserAccessToken{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := MigrateSupportThreads(); err != nil {
 		return err
 	}
 	if err := InitializeUserAuthVersions(); err != nil {

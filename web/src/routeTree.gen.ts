@@ -41,6 +41,7 @@ import { Route as AuthenticatedTaskPluginsIndexRouteImport } from './routes/_aut
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSupportIndexRouteImport } from './routes/_authenticated/support/index'
+import { Route as AuthenticatedSupportWorkbenchIndexRouteImport } from './routes/_authenticated/support-workbench/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedSiteOrdersIndexRouteImport } from './routes/_authenticated/site-orders/index'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
@@ -242,6 +243,12 @@ const AuthenticatedSupportIndexRoute =
   AuthenticatedSupportIndexRouteImport.update({
     id: '/support/',
     path: '/support/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSupportWorkbenchIndexRoute =
+  AuthenticatedSupportWorkbenchIndexRouteImport.update({
+    id: '/support-workbench/',
+    path: '/support-workbench/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSubscriptionsIndexRoute =
@@ -505,6 +512,7 @@ export interface FileRoutesByFullPath {
   '/security/': typeof AuthenticatedSecurityIndexRoute
   '/site-orders/': typeof AuthenticatedSiteOrdersIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
+  '/support-workbench/': typeof AuthenticatedSupportWorkbenchIndexRoute
   '/support/': typeof AuthenticatedSupportIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -573,6 +581,7 @@ export interface FileRoutesByTo {
   '/security': typeof AuthenticatedSecurityIndexRoute
   '/site-orders': typeof AuthenticatedSiteOrdersIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
+  '/support-workbench': typeof AuthenticatedSupportWorkbenchIndexRoute
   '/support': typeof AuthenticatedSupportIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
@@ -645,6 +654,7 @@ export interface FileRoutesById {
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
   '/_authenticated/site-orders/': typeof AuthenticatedSiteOrdersIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
+  '/_authenticated/support-workbench/': typeof AuthenticatedSupportWorkbenchIndexRoute
   '/_authenticated/support/': typeof AuthenticatedSupportIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
@@ -716,6 +726,7 @@ export interface FileRouteTypes {
     | '/security/'
     | '/site-orders/'
     | '/subscriptions/'
+    | '/support-workbench/'
     | '/support/'
     | '/system-info/'
     | '/system-settings/'
@@ -784,6 +795,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/site-orders'
     | '/subscriptions'
+    | '/support-workbench'
     | '/support'
     | '/system-info'
     | '/system-settings'
@@ -855,6 +867,7 @@ export interface FileRouteTypes {
     | '/_authenticated/security/'
     | '/_authenticated/site-orders/'
     | '/_authenticated/subscriptions/'
+    | '/_authenticated/support-workbench/'
     | '/_authenticated/support/'
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
@@ -1127,6 +1140,13 @@ declare module '@tanstack/react-router' {
       path: '/support'
       fullPath: '/support/'
       preLoaderRoute: typeof AuthenticatedSupportIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/support-workbench/': {
+      id: '/_authenticated/support-workbench/'
+      path: '/support-workbench'
+      fullPath: '/support-workbench/'
+      preLoaderRoute: typeof AuthenticatedSupportWorkbenchIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/subscriptions/': {
@@ -1500,6 +1520,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
   AuthenticatedSiteOrdersIndexRoute: typeof AuthenticatedSiteOrdersIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
+  AuthenticatedSupportWorkbenchIndexRoute: typeof AuthenticatedSupportWorkbenchIndexRoute
   AuthenticatedSupportIndexRoute: typeof AuthenticatedSupportIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedTaskPluginsIndexRoute: typeof AuthenticatedTaskPluginsIndexRoute
@@ -1530,6 +1551,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
   AuthenticatedSiteOrdersIndexRoute: AuthenticatedSiteOrdersIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
+  AuthenticatedSupportWorkbenchIndexRoute:
+    AuthenticatedSupportWorkbenchIndexRoute,
   AuthenticatedSupportIndexRoute: AuthenticatedSupportIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedTaskPluginsIndexRoute: AuthenticatedTaskPluginsIndexRoute,

@@ -790,3 +790,23 @@ For commercial licensing, please contact support@quantumnous.com
   left: 100%;
   background: linear-gradient(to right, var(--payment-mask-color, #fff), transparent);
 }
+
+/* Hide support scrollbars permanently without disabling content scrolling. */
+.support-widget-scrollbars,
+.support-widget-scrollbars * {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+
+.support-widget-scrollbars::-webkit-scrollbar,
+.support-widget-scrollbars *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Home-panel background. */
+.support-home-background {
+  background-image: linear-gradient(to bottom, #243cf1 220px, var(--background) 400px);
+  background-attachment: local;
+}

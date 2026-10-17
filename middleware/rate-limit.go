@@ -192,6 +192,18 @@ func UserCriticalRateLimit(scope string) func(c *gin.Context) {
 	)
 }
 
+// SupportChatRateLimit bounds support traffic without applying the much slower
+// account-recovery limit to ordinary conversation and read receipts.
+func SupportChatRateLimit(staff bool) gin.HandlerFunc {
+	limit := 30
+	scope := "support-user"
+	if staff {
+		limit = 120
+		scope = "support-staff"
+	}
+	return userRateLimitFactory(limit, 60, scope)
+}
+
 func DownloadRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(common.DownloadRateLimitNum, common.DownloadRateLimitDuration, "DW")
 }
