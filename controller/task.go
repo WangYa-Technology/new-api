@@ -50,12 +50,19 @@ func GetTask(c *gin.Context) {
 		createdAt = task.SubmitTime
 	}
 	failReason := task.FailReason
+	platform := task.Platform
+	if task.HasPrivateVideo() {
+		platform = "video"
+		if task.Status == model.TaskStatusFailure {
+			failReason = "Video generation failed"
+		}
+	}
 	if task.Status == model.TaskStatusSuccess && taskFailReasonIsLegacyResultURL(task.FailReason) {
 		failReason = ""
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"task_id":     task.TaskID,
-		"platform":    task.Platform,
+		"platform":    platform,
 		"status":      task.Status,
 		"progress":    task.Progress,
 		"fail_reason": failReason,
@@ -453,6 +460,13 @@ func tasksToDto(tasks []*model.Task, fillUser bool, viewerRole int) []*dto.TaskD
 			}
 		}
 		item := relay.TaskModel2Dto(task)
+		if viewerRole >= common.RoleAdminUser && task.HasPrivateVideo() {
+			item.Platform = string(task.Platform)
+			item.ChannelId = task.ChannelId
+			item.FailReason = task.FailReason
+			item.Properties = task.Properties
+			item.Data = task.Data
+		}
 		item.LegacyVideoAvailable = legacyVideoAvailable(task)
 		item.ResultDiscarded = task.PrivateData.ResultDiscarded
 		if task.Status == model.TaskStatusSuccess {

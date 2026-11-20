@@ -507,7 +507,7 @@ it('uses the same recharge conversion and token unit in task condition prices', 
   expect(screen.getAllByText('$3/1M token')).toHaveLength(2)
 })
 
-it('switches provider group prices, localized conditions and examples, and shows unconfigured providers', async () => {
+it('switches anonymous pricing options without exposing provider names', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -586,20 +586,22 @@ it('switches provider group prices, localized conditions and examples, and shows
     </QueryClientProvider>
   )
   const user = userEvent.setup()
-  const alpha = screen.getByRole('tab', { name: 'Alpha' })
+  const tabs = screen.getByRole('tablist', { name: 'Pricing by Group' })
+  expect(tabs).not.toHaveTextContent(/Alpha|Beta|Gamma|Delta/)
+  const alpha = screen.getByRole('tab', { name: 'Price option 1' })
   expect(alpha).toHaveAttribute('aria-selected', 'true')
-  let panel = screen.getByRole('tabpanel', { name: 'Alpha' })
+  let panel = screen.getByRole('tabpanel', { name: 'Price option 1' })
   expect(within(panel).getByText('Alpha sample')).toBeVisible()
   expect(within(panel).getByText('$0.8')).toBeVisible()
   await user.click(alpha)
   await user.keyboard('{ArrowRight}')
-  expect(screen.getByRole('tab', { name: 'Beta' })).toHaveFocus()
+  expect(screen.getByRole('tab', { name: 'Price option 2' })).toHaveFocus()
   await user.keyboard('{Enter}')
-  expect(screen.getByRole('tab', { name: 'Beta' })).toHaveAttribute(
+  expect(screen.getByRole('tab', { name: 'Price option 2' })).toHaveAttribute(
     'aria-selected',
     'true'
   )
-  panel = screen.getByRole('tabpanel', { name: 'Beta' })
+  panel = screen.getByRole('tabpanel', { name: 'Price option 2' })
   expect(within(panel).getByText('Beta sample')).toBeVisible()
   expect(within(panel).queryByText('Alpha sample')).not.toBeInTheDocument()
   expect(within(panel).getByText('Professional mode')).toBeVisible()
@@ -607,17 +609,21 @@ it('switches provider group prices, localized conditions and examples, and shows
   expect(within(panel).getByText('$6')).toBeVisible()
   await act(() => i18next.changeLanguage('zhCN'))
   expect(within(panel).getByText('专业模式')).toBeVisible()
+  expect(screen.getByRole('tab', { name: 'Price option 2' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  )
   await act(() => i18next.changeLanguage('en'))
-  await user.click(screen.getByRole('tab', { name: 'Gamma' }))
-  panel = screen.getByRole('tabpanel', { name: 'Gamma' })
+  await user.click(screen.getByRole('tab', { name: 'Price option 3' }))
+  panel = screen.getByRole('tabpanel', { name: 'Price option 3' })
   expect(
     within(panel).getByText(
       'This model is billed by usage, but the administrator has not configured its pricing yet.'
     )
   ).toBeVisible()
   expect(within(panel).queryByRole('table')).not.toBeInTheDocument()
-  await user.click(screen.getByRole('tab', { name: 'Delta' }))
-  panel = screen.getByRole('tabpanel', { name: 'Delta' })
+  await user.click(screen.getByRole('tab', { name: 'Price option 4' }))
+  panel = screen.getByRole('tabpanel', { name: 'Price option 4' })
   expect(within(panel).getByText('$0.5')).toBeVisible()
 })
 

@@ -1516,6 +1516,9 @@ func pluginProtocolTestDeps() pluginProtocolBridgeDeps {
 		tickJitter:         0,
 		heartbeatInterval:  time.Hour,
 		admissionTimeout:   time.Second,
+		artifactContentURL: func(taskID, artifactKey string) (string, error) {
+			return "https://gateway.example/v1/tasks/" + taskID + "/artifacts/" + artifactKey + "/content?access=test", nil
+		},
 	}
 }
 
@@ -1610,10 +1613,19 @@ export function buildSubmitRequest(ctx){return {url:ctx.baseUrl+"/images"};}
 export function parseSubmitResponse(ctx,resp){return {taskId:"vendor"};}
 export function buildQueryRequest(){return {url:"https://provider.example"};}
 export function parseTaskResult(){return {status:"SUCCESS"};}
+export function listArtifacts(task) {
+  return (task.data && task.data.images || []).map(function(_url, index) {
+    return {key: "image-" + index, type: "image", mimeType: "image/png"};
+  });
+}
+export function buildContentRequest(ctx) {
+  const index = Number(String(ctx.artifactKey).replace("image-", ""));
+  return {url: ctx.data.images[index], method: ctx.clientRequest.method, credentialless: true};
+}
 export const protocols = {openai_image: {
   decodeRequest: function(ctx) { return {kind:"submit", model: ctx.model, requestBody: ctx.body.value}; },
   render: function(ctx, task) {
-    const data = (task.data && task.data.images || []).map(function(url) { return {url: url}; });
+    const data = (task.data && task.data.images || []).map(function(_url, index) { return {url: ctx.artifacts["image-" + index].url}; });
     return {data: data, vendor: "test"};
   },
 }};
@@ -1701,7 +1713,8 @@ func TestServeTaskPluginImageProtocolRendersImmediateResultAndInlinesBase64(t *t
 			require.Len(t, data, 2)
 			for index, entry := range data {
 				item := entry.(map[string]any)
-				assert.Equal(t, fmt.Sprintf("https://cdn.example/%d.png", index+1), item["url"])
+				assert.Equal(t, fmt.Sprintf("https://gateway.example/v1/tasks/task_image/artifacts/image-%d/content?access=test", index), item["url"])
+				assert.NotContains(t, item["url"], "cdn.example")
 				assert.Equal(t, tc.wantB64[index], item["b64_json"])
 			}
 			if tc.responseFormat == "b64_json" {
@@ -1757,7 +1770,7 @@ func TestServeTaskPluginImageProtocolWaitsForAsynchronousTask(t *testing.T) {
 			require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 			if tc.wantStatus == http.StatusOK {
 				assert.GreaterOrEqual(t, polls, 3)
-				assert.Equal(t, []any{map[string]any{"url": "https://cdn.example/polled.png"}}, response["data"])
+				assert.Equal(t, []any{map[string]any{"url": "https://gateway.example/v1/tasks/task_image/artifacts/image-0/content?access=test"}}, response["data"])
 				return
 			}
 			errorBody := response["error"].(map[string]any)

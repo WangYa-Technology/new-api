@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -101,6 +102,47 @@ func TestTaskModel2DtoNormalizesLegacyAction(t *testing.T) {
 
 	assert.Equal(t, constant.TaskActionFirstTailToVideo, dtoTask.Action)
 	assert.Equal(t, "firstTailGenerate", task.Action)
+}
+
+func TestPrivateVideoTaskProjection(t *testing.T) {
+	task := &model.Task{
+		TaskID: "task-public", Platform: "provider-video", ChannelId: 17, Status: model.TaskStatusFailure,
+		FailReason: "https://provider.example/internal-detail",
+		Properties: model.Properties{OriginModelName: "seedance-2.0", UpstreamModelName: "provider-model"},
+		Data:       []byte(`{"vendor_task_id":"private-task"}`),
+		PrivateData: model.TaskPrivateData{
+			PluginState: []byte(`{"privateVideo":true}`),
+			ResultURL:   "https://provider.example/video.mp4",
+		},
+	}
+
+	public := TaskModel2Dto(task)
+	assert.Equal(t, "task-public", public.TaskID)
+	properties, ok := public.Properties.(model.Properties)
+	require.True(t, ok)
+	assert.Equal(t, "seedance-2.0", properties.OriginModelName)
+	assert.Equal(t, "video", public.Platform)
+	assert.Equal(t, "Video generation failed", public.FailReason)
+	assert.Zero(t, public.ChannelId)
+	assert.Empty(t, properties.UpstreamModelName)
+	assert.Empty(t, public.ResultURL)
+	assert.Empty(t, public.Data)
+
+	task.PrivateData.PluginState = []byte(`{"otherState":true}`)
+	assert.Equal(t, task.Properties, TaskModel2Dto(task).Properties)
+	assert.NotEmpty(t, TaskModel2Dto(task).Data)
+}
+
+func TestPrivateVideoSubmissionErrorHidesProviderDetail(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", nil)
+	upstreamError := errors.New("https://provider.example: connection closed")
+	ambiguous := privateVideoSubmitError(c, upstreamError, http.StatusBadGateway, true)
+	require.True(t, ambiguous.NoRetry)
+	assert.Equal(t, "Video submission failed", ambiguous.Message)
+	rejection := privateVideoSubmitError(c, upstreamError, http.StatusTooManyRequests, false)
+	assert.False(t, rejection.NoRetry)
+	assert.Equal(t, http.StatusTooManyRequests, rejection.StatusCode)
 }
 
 const mappingOrderSubmitPlugin = `

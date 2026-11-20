@@ -186,6 +186,17 @@ func (t *Task) GetUpstreamTaskID() string {
 	return t.TaskID
 }
 
+// HasPrivateVideo reports whether the plugin opted to expose only gateway video data.
+func (t *Task) HasPrivateVideo() bool {
+	if len(t.PrivateData.PluginState) == 0 {
+		return false
+	}
+	var state struct {
+		PrivateVideo bool `json:"privateVideo"`
+	}
+	return common.Unmarshal(t.PrivateData.PluginState, &state) == nil && state.PrivateVideo
+}
+
 // GetResultURL 获取任务结果 URL（视频地址等）
 // 新数据存在 PrivateData.ResultURL 中；旧数据回退到 FailReason（历史兼容）
 func (t *Task) GetResultURL() string {

@@ -282,6 +282,9 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 	switch resp.StatusCode {
 	case http.StatusOK, http.StatusPartialContent, http.StatusNotModified, http.StatusRequestedRangeNotSatisfiable:
 		copyTaskMediaResponseHeaders(c.Writer.Header(), resp.Header)
+		if task.HasPrivateVideo() {
+			c.Writer.Header().Del("Content-Disposition")
+		}
 		setTaskMediaResponseSecurityHeaders(c.Writer.Header())
 		c.Status(resp.StatusCode)
 		c.Writer.WriteHeaderNow()

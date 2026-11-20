@@ -56,7 +56,6 @@ import {
   formatUptimePct,
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
-import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
@@ -1028,26 +1027,16 @@ function GroupPricingSection(props: GroupPricingSectionProps) {
       <SectionTitle>{t('Pricing by Group')}</SectionTitle>
       <Tabs key={props.model.model_name} defaultValue={variants[0].plugin_key}>
         <TabsList
-          aria-label={t('Provider')}
+          aria-label={t('Pricing by Group')}
           className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'
         >
-          {variants.map((variant) => (
+          {variants.map((variant, index) => (
             <TabsTrigger
               key={variant.plugin_key}
               value={variant.plugin_key}
               className='max-w-full min-w-0'
             >
-              <PluginIcon
-                plugin={{
-                  key: variant.plugin_key,
-                  name: variant.plugin_name,
-                  icon: variant.icon,
-                }}
-                size={16}
-              />
-              <span className='truncate' title={variant.plugin_name}>
-                {variant.plugin_name}
-              </span>
+              {t('Price option {{number}}', { number: index + 1 })}
             </TabsTrigger>
           ))}
         </TabsList>

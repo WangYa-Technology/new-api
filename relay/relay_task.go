@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -257,6 +258,8 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	if pinnedPlugin.Plugin != nil {
 		pluginKey = pinnedPlugin.Plugin.Meta.Key
 	}
+	privateVideo := pinnedPlugin.Plugin != nil &&
+		slices.Contains(pinnedPlugin.Plugin.Meta.RequiredCapabilities, jsplugin.CapabilityPrivateVideo)
 	exprStr, exists := billing_setting.ResolveTaskBillingExpr(pluginKey, modelName, info.UpstreamModelName)
 	useTiered := exists || billing_setting.GetBillingMode(modelName) == billing_setting.BillingModeTieredExpr
 	if useTiered {
@@ -348,15 +351,24 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	// 9. 发送请求
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
+		if privateVideo {
+			return nil, privateVideoSubmitError(c, err, http.StatusBadGateway, true)
+		}
 		return nil, service.TaskErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
 	}
 	if resp == nil {
+		if privateVideo {
+			return nil, privateVideoSubmitError(c, errors.New("empty upstream response"), http.StatusBadGateway, true)
+		}
 		return nil, service.TaskErrorWrapperLocal(errors.New("upstream returned an empty response"), "fail_to_fetch_task", http.StatusBadGateway)
 	}
 	defer resp.Body.Close()
 	// Any 2xx is a successful submission: task APIs commonly answer 201 Created
 	// or 202 Accepted, and parseSubmitResponse receives the exact status code.
 	if resp.StatusCode/100 != 2 {
+		if privateVideo {
+			return nil, privateVideoSubmitError(c, errors.New(http.StatusText(resp.StatusCode)), resp.StatusCode, resp.StatusCode != http.StatusTooManyRequests)
+		}
 		responseBody, _ := io.ReadAll(resp.Body)
 		return nil, service.TaskErrorWrapper(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
 	}
@@ -365,9 +377,15 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	// task barrier and billing settlement.
 	parsed, taskErr := adaptor.ParseResponse(c, resp, info)
 	if taskErr != nil {
+		if privateVideo {
+			return nil, privateVideoSubmitError(c, errors.New(taskErr.Message), http.StatusBadGateway, true)
+		}
 		return nil, taskErr
 	}
 	if parsed == nil {
+		if privateVideo {
+			return nil, privateVideoSubmitError(c, errors.New("empty parsed response"), http.StatusBadGateway, true)
+		}
 		return nil, service.TaskErrorWrapperLocal(errors.New("task adaptor returned an empty response"), "plugin_submit_response_invalid", http.StatusBadGateway)
 	}
 
@@ -417,6 +435,13 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 
 // recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。
 // 公式: baseQuota × ∏(ratio) — 其中 baseQuota 是不含 OtherRatios 的基础额度。
+func privateVideoSubmitError(c *gin.Context, cause error, status int, noRetry bool) *dto.TaskError {
+	logger.LogWarn(c, fmt.Sprintf("video submission failed (HTTP %d): %v", status, cause))
+	taskErr := service.TaskErrorWrapper(errors.New("Video submission failed"), "video_submission_failed", status)
+	taskErr.NoRetry = noRetry
+	return taskErr
+}
+
 func recalcQuotaFromRatios(info *relaycommon.RelayInfo, ratios map[string]float64) (int, bool) {
 	// 从 PriceData 获取不含 OtherRatios 的基础价格
 	baseQuota := info.PriceData.RemoveOtherRatiosFromFloat(float64(info.PriceData.Quota))
@@ -647,7 +672,7 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 }
 
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
-	return &dto.TaskDto{
+	public := &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
 		UpdatedAt:  task.UpdatedAt,
@@ -669,4 +694,17 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Username:   task.Username,
 		Data:       task.Data,
 	}
+	if task.HasPrivateVideo() {
+		public.Platform = "video"
+		public.ChannelId = 0
+		properties := task.Properties
+		properties.UpstreamModelName = ""
+		public.Properties = properties
+		public.ResultURL = ""
+		public.Data = nil
+		if task.Status == model.TaskStatusFailure {
+			public.FailReason = "Video generation failed"
+		}
+	}
+	return public
 }
