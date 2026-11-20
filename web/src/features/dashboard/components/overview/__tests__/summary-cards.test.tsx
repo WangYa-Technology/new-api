@@ -61,7 +61,9 @@ beforeEach(() => {
       return { data: { data: { display_in_currency: true } } }
     }
     if (url !== '/api/data/self') throw new Error(`Unexpected request: ${url}`)
-    const isToday = config?.params.start_timestamp === midnight
+    const isToday =
+      (config?.params as { start_timestamp?: number } | undefined)
+        ?.start_timestamp === midnight
     if (isToday) {
       await new Promise<void>((resolve) => {
         resolveToday = resolve

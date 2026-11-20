@@ -205,7 +205,7 @@ func CompleteAlipayTopUp(tradeNo string) error {
 		return err
 	}
 	if completed {
-		RecordTopupLog(order.UserID, fmt.Sprintf("Alipay payment %s credited %d quota (CNY %.2f)", tradeNo, order.CreditedQuota, float64(order.AmountFen)/100), "", PaymentMethodAlipayDirect, PaymentProviderAlipay)
+		RecordTopupLog(order.UserID, common.NewMessage(fmt.Sprintf("Alipay payment %s credited %d quota (CNY %.2f)", tradeNo, order.CreditedQuota, float64(order.AmountFen)/100)), "", PaymentMethodAlipayDirect, PaymentProviderAlipay)
 	}
 	return SyncAlipayQuotaCache(&order)
 }

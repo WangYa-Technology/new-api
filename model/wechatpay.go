@@ -185,7 +185,7 @@ func CompleteWechatPayTopUp(tradeNo string) error {
 		return err
 	}
 	if completed {
-		RecordTopupLog(order.UserID, fmt.Sprintf("WechatPay payment %s credited %d quota (CNY %.2f)", tradeNo, order.CreditedQuota, float64(order.AmountFen)/100), "", PaymentMethodWechatPay, PaymentProviderWechatPay)
+		RecordTopupLog(order.UserID, common.NewMessage(fmt.Sprintf("WechatPay payment %s credited %d quota (CNY %.2f)", tradeNo, order.CreditedQuota, float64(order.AmountFen)/100)), "", PaymentMethodWechatPay, PaymentProviderWechatPay)
 	}
 	return SyncWechatPayQuotaCache(&order)
 }

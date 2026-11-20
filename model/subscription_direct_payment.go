@@ -170,10 +170,10 @@ func completeDirectSubscriptionPayment(tradeNo, provider string) error {
 		refreshSubscriptionUserGroupCache(userID, "direct subscription payment")
 	}
 	if reviewed {
-		RecordLog(userID, LogTypeSystem, fmt.Sprintf("订阅订单已付款，因购买限制冲突待人工处理，未发放权益，订单: %s，支付方式: %s", tradeNo, provider))
+		RecordLog(userID, LogTypeSystem, common.NewMessage(fmt.Sprintf("订阅订单已付款，因购买限制冲突待人工处理，未发放权益，订单: %s，支付方式: %s", tradeNo, provider)))
 	}
 	if completed {
-		RecordLog(userID, LogTypeTopup, fmt.Sprintf("订阅购买成功，订单: %s，支付方式: %s", tradeNo, provider))
+		RecordLog(userID, LogTypeTopup, common.NewMessage(fmt.Sprintf("订阅购买成功，订单: %s，支付方式: %s", tradeNo, provider)))
 	}
 	return nil
 }

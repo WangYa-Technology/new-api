@@ -297,9 +297,14 @@ test('wallet pending notice disappears after cancellation is accepted', async ()
     data: {
       success: true,
       data: {
-        total: config?.params.provider === 'alipay' ? 1 : 0,
+        total:
+          (config?.params as { provider?: string } | undefined)?.provider ===
+          'alipay'
+            ? 1
+            : 0,
         items:
-          config?.params.provider === 'alipay'
+          (config?.params as { provider?: string } | undefined)?.provider ===
+          'alipay'
             ? [
                 {
                   id: 15,
@@ -628,7 +633,9 @@ test('wallet retains a MixPay pending order under review without offering paymen
   useAuthStore.getState().auth.setUser({ id: 42, username: 'test', role: 1 })
   vi.mocked(api.get).mockImplementation(async (_url, config) => {
     const visible =
-      config?.params.provider === 'mixpay' && !config.params.actionable
+      (config?.params as { provider?: string } | undefined)?.provider ===
+        'mixpay' &&
+      !(config?.params as { actionable?: boolean } | undefined)?.actionable
     return {
       data: {
         success: true,
@@ -694,9 +701,14 @@ test('wallet offers payment for a pending MixPay order during automatic query re
     data: {
       success: true,
       data: {
-        total: config?.params.provider === 'mixpay' ? 1 : 0,
+        total:
+          (config?.params as { provider?: string } | undefined)?.provider ===
+          'mixpay'
+            ? 1
+            : 0,
         items:
-          config?.params.provider === 'mixpay'
+          (config?.params as { provider?: string } | undefined)?.provider ===
+          'mixpay'
             ? [
                 {
                   id: 64,

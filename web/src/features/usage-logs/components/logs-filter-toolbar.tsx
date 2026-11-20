@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Table } from '@tanstack/react-table'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { useState, type ComponentProps, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -50,10 +50,12 @@ interface LogsFilterToolbarProps<TData> {
   mobileFilterCount?: number
   stats?: ReactNode
   actionStart?: ReactNode
+  actionEnd?: ReactNode
   hasActiveFilters: boolean
   hasAdvancedActiveFilters?: boolean
   advancedFilterCount?: number
   searchLoading?: boolean
+  onSearch?: () => void
   onReset: () => void
   className?: string
 }
@@ -166,6 +168,18 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
                   )}
                 </Button>
               </DrawerTrigger>
+              {props.onSearch && (
+                <Button
+                  type='button'
+                  onClick={props.onSearch}
+                  disabled={props.searchLoading}
+                  aria-busy={props.searchLoading}
+                >
+                  {props.searchLoading && <Loader2 className='animate-spin' />}
+                  {t('Search')}
+                </Button>
+              )}
+              {props.actionEnd}
               <DataTableViewOptions table={props.table} />
             </>
           }
@@ -256,6 +270,17 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
           >
             {t('Reset')}
           </Button>
+          {props.onSearch && (
+            <Button
+              type='button'
+              onClick={props.onSearch}
+              disabled={props.searchLoading}
+            >
+              {props.searchLoading && <Loader2 className='animate-spin' />}
+              {t('Search')}
+            </Button>
+          )}
+          {props.actionEnd}
           <DataTableViewOptions table={props.table} />
         </div>
       </div>

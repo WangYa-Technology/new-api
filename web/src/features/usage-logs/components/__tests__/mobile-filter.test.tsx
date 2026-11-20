@@ -1,21 +1,3 @@
-/*
-Copyright (C) 2023-2026 QuantumNous
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
-*/
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -44,6 +26,25 @@ import { api } from '@/lib/api'
 
 import { CommonLogsFilterBar } from '../common-logs-filter-bar'
 import { CompactDateTimeRangePicker } from '../compact-date-time-range-picker'
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { LogsFilterToolbar } from '../logs-filter-toolbar'
 import { TaskLogsFilterBar } from '../task-logs-filter-bar'
 import { UsageLogsProvider } from '../usage-logs-provider'
 
@@ -185,10 +186,76 @@ it('keeps all quick actions visible without opening a menu', async () => {
   await user.click(screen.getByRole('button', { name: 'Hide' }))
   expect(screen.getByRole('button', { name: 'Show' })).toBeVisible()
   screen.getByRole('button', { name: 'Show' }).focus()
-  for (const name of ['Filter', 'View']) {
+  for (const name of ['Filter', 'Export', 'View']) {
     await user.tab()
     expect(screen.getByRole('button', { name })).toHaveFocus()
   }
+})
+
+function LoadingFixture(props: { loading: boolean; onSearch: () => void }) {
+  const table = useReactTable({
+    data: [],
+    columns: [],
+    getCoreRowModel: getCoreRowModel(),
+  })
+  return (
+    <LogsFilterToolbar
+      table={table}
+      compactMobile
+      mobilePinnedFilters={<span>Date Range</span>}
+      primaryFilters={null}
+      hasActiveFilters={false}
+      onReset={() => {}}
+      onSearch={props.onSearch}
+      searchLoading={props.loading}
+    />
+  )
+}
+
+it('keeps Search visible while loading and prevents repeated searches', async () => {
+  const original = window.matchMedia
+  vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+    ...original(query),
+    matches: query === '(max-width: 640px)',
+  }))
+  const onSearch = vi.fn()
+  const user = userEvent.setup()
+  const view = render(<LoadingFixture loading onSearch={onSearch} />)
+  const search = screen.getByRole('button', { name: 'Search' })
+  expect(search).toBeVisible()
+  expect(search).toBeDisabled()
+  expect(search).toHaveAttribute('aria-busy', 'true')
+  await user.click(search)
+  expect(onSearch).not.toHaveBeenCalled()
+  view.rerender(<LoadingFixture loading={false} onSearch={onSearch} />)
+  expect(search).toBeEnabled()
+  await user.click(search)
+  expect(onSearch).toHaveBeenCalledTimes(1)
+})
+
+it('places the end action between Search and View on desktop', () => {
+  function DesktopFixture() {
+    const table = useReactTable({
+      data: [],
+      columns: [],
+      getCoreRowModel: getCoreRowModel(),
+    })
+    return (
+      <LogsFilterToolbar
+        table={table}
+        primaryFilters={null}
+        actionEnd={<button type='button'>Export</button>}
+        hasActiveFilters={false}
+        onReset={() => {}}
+        onSearch={() => {}}
+      />
+    )
+  }
+  render(<DesktopFixture />)
+  const names = screen
+    .getAllByRole('button')
+    .map((button) => button.textContent)
+  expect(names.slice(-4)).toEqual(['Reset', 'Search', 'Export', 'View'])
 })
 
 it('collapses only date and statistics while keeping the right-hand quick actions visible', async () => {
@@ -265,4 +332,37 @@ it('task ID input automatically filters and resets pagination', async () => {
       page: 1,
     })
   )
+})
+
+it('keeps the seconds of the current range when it is confirmed again', async () => {
+  const user = userEvent.setup()
+  const onChange = vi.fn()
+  render(
+    <CompactDateTimeRangePicker
+      start={new Date(2026, 8, 7, 9, 30, 15)}
+      end={new Date(2026, 8, 8, 17, 45, 59)}
+      onChange={onChange}
+    />
+  )
+  await user.click(screen.getByRole('button', { name: /^2026/ }))
+  await user.click(screen.getByRole('button', { name: 'Confirm' }))
+  expect(onChange).toHaveBeenCalledWith({
+    start: new Date(2026, 8, 7, 9, 30, 15),
+    end: new Date(2026, 8, 8, 17, 45, 59),
+  })
+})
+
+it('shows the seconds of the selected range on the trigger', () => {
+  render(
+    <CompactDateTimeRangePicker
+      start={new Date(2026, 8, 7, 9, 30, 15)}
+      end={new Date(2026, 8, 8, 17, 45, 59)}
+      onChange={() => undefined}
+    />
+  )
+  expect(
+    screen.getByRole('button', {
+      name: '2026-09-07 09:30:15 ~ 2026-09-08 17:45:59',
+    })
+  ).toBeVisible()
 })

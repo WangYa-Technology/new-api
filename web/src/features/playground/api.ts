@@ -75,7 +75,7 @@ export async function getUserGroups(): Promise<GroupOption[]> {
 
   const groupData = data.data as Record<
     string,
-    { desc: string; ratio: number; display_name?: string }
+    { desc: string; ratio: number | string; display_name?: string }
   >
 
   // label is for button display (name only); desc is for dropdown content

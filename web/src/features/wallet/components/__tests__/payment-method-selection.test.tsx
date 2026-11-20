@@ -110,7 +110,9 @@ describe('recharge payment method selection', () => {
     async (type, name, icon, colorClass, color) => {
       const method = { type, name, icon }
       const selection = render(<PaymentMethodFixture methods={[method]} />)
-      expect(screen.getByText(name).parentElement).toHaveClass('text-inherit')
+      expect(
+        screen.getByText(name, { selector: 'span' }).parentElement
+      ).toHaveClass('text-inherit')
       if (type === 'wechatpay_native') {
         expect(
           document.querySelector('img[src="/wechatpay-logo.svg"]')
@@ -156,7 +158,8 @@ test.each([
   (type, name, background) => {
     render(<PaymentMethodFixture methods={[{ type, name }]} />)
     const label = screen.getByText(
-      type === 'mixpay' ? 'MixPay(Crypto)' : name
+      type === 'mixpay' ? 'MixPay(Crypto)' : name,
+      { selector: 'span' }
     ).parentElement
     expect(label?.closest('button')).toHaveClass(
       background,
@@ -193,7 +196,7 @@ test.each([
   'shared payment label provides name, icon and theme for %s',
   (method, name, color) => {
     render(<PaymentMethodLabel method={method} />)
-    const label = screen.getByText(name).parentElement
+    const label = screen.getByText(name, { selector: 'span' }).parentElement
     expect(label).toHaveClass(color)
     const icon = label?.querySelector('[aria-hidden="true"]')
     expect(icon).not.toBeEmptyDOMElement()
