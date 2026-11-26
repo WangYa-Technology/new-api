@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -60,7 +59,6 @@ func TestPricingCarriesTaskUsageSchemaAndRefreshesWithPluginGeneration(t *testin
 }`)
 	_, err = jsplugin.DefaultRegistry.Register(updatedSource, jsplugin.Options{})
 	require.NoError(t, err)
-	lastGetPricingTime = time.Now().Add(-2 * time.Minute)
 
 	refreshedPricing := pricingByModel(GetPricing())
 	require.Len(t, refreshedPricing["pricing-usage-model"].BillingUsageSchema, 2)

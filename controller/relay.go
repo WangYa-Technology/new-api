@@ -664,7 +664,18 @@ func executeTaskSubmissionWith(
 		Retry:       common.GetPointer(0),
 	}
 
-	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
+	pinnedValue, _ := c.Get(pluginruntime.ContextKeyPinnedEndpoint)
+	pinned, _ := pinnedValue.(pluginruntime.PinnedEndpoint)
+	_, channelPinned, _ := service.GetChannelConstraints(c).ResolvedPin()
+	videoFailover := pinned.Protocol == "openai_video" && relayInfo.ChannelMeta != nil &&
+		relayInfo.LockedChannel == nil && !channelPinned &&
+		common.GetEnvOrDefaultBool("VIDEO_TASK_FAILOVER_ENABLED", false)
+	retryLimit := common.RetryTimes
+	if videoFailover {
+		// Allow the other primary and then the lower-priority standby.
+		retryLimit = 2
+	}
+	for ; retryParam.GetRetry() <= retryLimit; retryParam.IncreaseRetry() {
 		stage = "select_channel"
 		if requestErr := c.Request.Context().Err(); requestErr != nil {
 			diagnostics.cancelled("before_attempt", retryParam.GetRetry()+1)
@@ -687,6 +698,9 @@ func executeTaskSubmissionWith(
 			channel, channelErr = getChannel(c, relayInfo, retryParam)
 			if channelErr != nil {
 				logger.LogError(c, channelErr.Error())
+				if videoFailover && taskErr != nil {
+					break
+				}
 				taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", channelErr.StatusCode)
 				break
 			}
@@ -720,7 +734,16 @@ func executeTaskSubmissionWith(
 
 		taskAPIError := taskSubmissionAPIError(taskErr)
 		relayInfo.LastError = taskAPIError
-		decision := decideTaskRetry(c, taskErr, common.RetryTimes-retryParam.GetRetry())
+		decision := decideTaskRetry(c, taskErr, retryLimit-retryParam.GetRetry())
+		if videoFailover && decision.Action == "retry" {
+			// Only an explicit rejection lets us safely send the task again.
+			if taskErr.LocalError || taskErr.StatusCode != http.StatusTooManyRequests {
+				decision = service.PolicyDecision{Action: "stop", Reason: "video_submission_not_confirmed_rejected", Source: "system"}
+			} else {
+				retryParam.AttemptedChannelIDs = append(retryParam.AttemptedChannelIDs, channel.Id)
+				retryParam.TokenGroup = policy.SelectedGroup
+			}
+		}
 		service.RecordPolicyFailure(c, channel.Id, taskAPIError, decision)
 		if !taskErr.LocalError {
 			processChannelError(c,

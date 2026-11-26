@@ -129,13 +129,12 @@ func main() {
 	}
 	wsmanager.StartSubscriber(context.Background())
 
-	// Warm pricing after channel cache initialization so Advanced Custom
-	// endpoint inference can read cached route settings on first request.
-	model.GetPricing()
-
 	// The first plugin sync finishes before the server accepts requests, so no
 	// request runs without the uploaded plugins.
 	controller.SyncTaskPluginsOnce()
+
+	// Warm pricing once the channel cache and uploaded plugins are ready.
+	model.GetPricing()
 
 	// Every node reloads a topic within seconds of a write to it on any node.
 	// The periodic reloads below stay for writes that do not bump a topic.

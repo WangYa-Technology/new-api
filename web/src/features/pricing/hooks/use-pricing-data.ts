@@ -30,7 +30,9 @@ export function usePricingData(enabled = true) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['pricing'],
     queryFn: async () => requireServerSuccess(await getPricing()),
-    staleTime: 5 * 60 * 1000,
+    // Prices can change in another session or while a deployment is rolling out.
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     enabled,
   })
 

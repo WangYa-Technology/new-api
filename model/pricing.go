@@ -65,11 +65,12 @@ type PricingVendor struct {
 }
 
 var (
-	pricingMap           []Pricing
-	vendorsList          []PricingVendor
-	supportedEndpointMap map[string]common.EndpointInfo
-	lastGetPricingTime   time.Time
-	updatePricingLock    sync.Mutex
+	pricingMap              []Pricing
+	vendorsList             []PricingVendor
+	supportedEndpointMap    map[string]common.EndpointInfo
+	lastGetPricingTime      time.Time
+	pricingPluginGeneration *jsplugin.RoutingGeneration
+	updatePricingLock       sync.Mutex
 
 	// 缓存映射：模型名 -> 启用分组 / 计费类型
 	modelEnableGroups     = make(map[string][]string)
@@ -83,17 +84,21 @@ var (
 )
 
 func GetPricing() []Pricing {
-	if time.Since(lastGetPricingTime) > time.Minute*1 || len(pricingMap) == 0 {
-		updatePricingLock.Lock()
-		defer updatePricingLock.Unlock()
-		// Double check after acquiring the lock
-		if time.Since(lastGetPricingTime) > time.Minute*1 || len(pricingMap) == 0 {
-			modelSupportEndpointsLock.Lock()
-			defer modelSupportEndpointsLock.Unlock()
-			updatePricing()
-		}
-	}
+	updatePricingLock.Lock()
+	defer updatePricingLock.Unlock()
+	refreshPricingIfStale()
 	return pricingMap
+}
+
+// refreshPricingIfStale runs with updatePricingLock held.
+func refreshPricingIfStale() {
+	if time.Since(lastGetPricingTime) < time.Minute && len(pricingMap) > 0 &&
+		pricingPluginGeneration == jsplugin.DefaultRegistry.Generation() {
+		return
+	}
+	modelSupportEndpointsLock.Lock()
+	defer modelSupportEndpointsLock.Unlock()
+	updatePricing()
 }
 
 func InvalidatePricingCache() {
@@ -107,10 +112,9 @@ func InvalidatePricingCache() {
 
 // GetVendors 返回当前定价接口使用到的供应商信息
 func GetVendors() []PricingVendor {
-	if time.Since(lastGetPricingTime) > time.Minute*1 || len(pricingMap) == 0 {
-		// 保证先刷新一次
-		GetPricing()
-	}
+	updatePricingLock.Lock()
+	defer updatePricingLock.Unlock()
+	refreshPricingIfStale()
 	return vendorsList
 }
 
@@ -216,6 +220,7 @@ func appendPricingEndpoint(endpoints []string, endpoint string) []string {
 }
 
 func updatePricing() {
+	pluginGeneration := jsplugin.DefaultRegistry.Generation()
 	//modelRatios := common.GetModelRatios()
 	enableAbilities, err := GetAllEnableAbilityWithChannels()
 	if err != nil {
@@ -254,7 +259,6 @@ func updatePricing() {
 	}
 
 	modelGroupsMap := make(map[string]*types.Set[string])
-	pluginGeneration := jsplugin.DefaultRegistry.Generation()
 	// Models an ordinary channel serves: neither a task plugin channel nor a
 	// legacy channel type that one of the model's plugins claims.
 	ordinaryChannelModels := make(map[string]bool)
@@ -494,9 +498,12 @@ func updatePricing() {
 	modelEnableGroupsLock.Unlock()
 
 	lastGetPricingTime = time.Now()
+	pricingPluginGeneration = pluginGeneration
 }
 
 // GetSupportedEndpointMap 返回全局端点到路径的映射
 func GetSupportedEndpointMap() map[string]common.EndpointInfo {
+	modelSupportEndpointsLock.RLock()
+	defer modelSupportEndpointsLock.RUnlock()
 	return supportedEndpointMap
 }

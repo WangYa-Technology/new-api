@@ -47,12 +47,13 @@ func AppendTaskPluginIdentityFilter(c *gin.Context, pluginKey string) {
 }
 
 type RetryParam struct {
-	Ctx          *gin.Context
-	TokenGroup   string
-	ModelName    string
-	RequestPath  string
-	Retry        *int
-	resetNextTry bool
+	Ctx                 *gin.Context
+	TokenGroup          string
+	ModelName           string
+	RequestPath         string
+	Retry               *int
+	AttemptedChannelIDs []int
+	resetNextTry        bool
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -123,6 +124,13 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 	filters := GetChannelConstraints(param.Ctx).Filters
 	affinityRetryOffset := param.Ctx.GetInt(ginKeyChannelAffinityRetryOffset)
+	if len(param.AttemptedChannelIDs) > 0 {
+		filters = append(append([]dto.ChannelFilter(nil), filters...), dto.ChannelFilter{
+			Kind: dto.FilterAttemptedChannels, AttemptedChannelIDs: param.AttemptedChannelIDs,
+		})
+		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, 0, filters)
+		return channel, selectGroup, err
+	}
 
 	if param.TokenGroup == "auto" {
 		autoGroups := GetRequestAutoGroups(param.Ctx, userGroup)

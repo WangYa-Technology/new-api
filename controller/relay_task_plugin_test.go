@@ -657,6 +657,63 @@ func TestAcceptedSubmitStreamNeverRetries(t *testing.T) {
 	assert.Equal(t, service.PolicyDecision{Action: "stop", Reason: "task_accepted", Source: "system"}, decideTaskRetry(c, &dto.TaskError{StatusCode: 502, LocalError: true, NoRetry: true}, 3))
 }
 
+func TestVideoSubmissionFailoverTriesRemainingPrimaryBeforeStandby(t *testing.T) {
+	t.Setenv("VIDEO_TASK_FAILOVER_ENABLED", "true")
+	db, _ := openTaskDialectDatabase(t, &model.Channel{}, &model.Ability{})
+	previousDB := model.DB
+	model.DB = db
+	memoryCache, retryTimes := common.MemoryCacheEnabled, common.RetryTimes
+	common.MemoryCacheEnabled, common.RetryTimes = true, 0
+	t.Cleanup(func() {
+		require.NoError(t, db.Where("id > ?", 0).Delete(&model.Channel{}).Error)
+		require.NoError(t, db.Where("channel_id > ?", 0).Delete(&model.Ability{}).Error)
+		model.InitChannelCache()
+		common.MemoryCacheEnabled, common.RetryTimes = memoryCache, retryTimes
+		model.DB = previousDB
+	})
+	for index, priority := range []int64{90, 90, 80} {
+		channel := model.Channel{
+			Id: index + 1, Type: constant.ChannelTypeOpenAI, Name: fmt.Sprintf("video-%d", index),
+			Key: "test-key", Status: common.ChannelStatusEnabled, Models: "plugin-model", Group: "default",
+			Priority: common.GetPointer(priority), Weight: common.GetPointer(uint(100)),
+		}
+		require.NoError(t, db.Create(&channel).Error)
+		require.NoError(t, channel.AddAbilities(db))
+	}
+	model.InitChannelCache()
+
+	for _, tc := range []struct {
+		name     string
+		status   int
+		attempts int
+	}{
+		{"explicit rejection", http.StatusTooManyRequests, 3},
+		{"ambiguous failure", http.StatusBadGateway, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := taskSubmissionTestContext()
+			c.Request.URL.Path = "/v1/videos"
+			c.Set(pluginruntime.ContextKeyPinnedEndpoint, pluginruntime.PinnedEndpoint{Protocol: "openai_video"})
+			info := taskSubmissionRelayInfo(nil)
+			info.LockedChannel = nil
+			info.TokenGroup = "default"
+			var tried []int
+			_, taskErr := executeTaskSubmissionWith(c, info, func(c *gin.Context, _ *relaycommon.RelayInfo) (*relay.TaskSubmitResult, *dto.TaskError) {
+				tried = append(tried, c.GetInt("channel_id"))
+				return nil, service.TaskErrorWrapper(errors.New("upstream failure"), "fixture_error", tc.status)
+			})
+			require.NotNil(t, taskErr)
+			assert.Equal(t, tc.status, taskErr.StatusCode)
+			require.Len(t, tried, tc.attempts)
+			assert.Contains(t, []int{1, 2}, tried[0])
+			if tc.attempts == 3 {
+				assert.ElementsMatch(t, []int{1, 2}, tried[:2])
+				assert.Equal(t, 3, tried[2])
+			}
+		})
+	}
+}
+
 // Local task rejections carry a message but no cause; the response and the
 // decision record must still be produced.
 func TestRespondTaskSubmissionErrorWithoutCause(t *testing.T) {
